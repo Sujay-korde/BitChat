@@ -130,6 +130,7 @@ export class SecureChatClient {
           });
         } catch (e) {
           console.error("Failed to decrypt message", e);
+          this.dispatch({ type: "EncryptionUnavailable" });
         }
         break;
       case MessageType.ACK:
@@ -203,7 +204,14 @@ export class SecureChatClient {
       return;
     }
 
-    const ciphertext = await this.crypto.encrypt(room, text);
+    let ciphertext: string;
+    try {
+      ciphertext = await this.crypto.encrypt(room, text);
+    } catch (e) {
+      this.dispatch({ type: "EncryptionUnavailable" });
+      return;
+    }
+
     const msgId = await this._sendRaw(MessageType.MSG, room, TargetType.ROOM, ciphertext);
     
     this.dispatch({
@@ -222,7 +230,14 @@ export class SecureChatClient {
       return;
     }
 
-    const ciphertext = await this.crypto.encrypt(peer, text);
+    let ciphertext: string;
+    try {
+      ciphertext = await this.crypto.encrypt(peer, text);
+    } catch (e) {
+      this.dispatch({ type: "EncryptionUnavailable" });
+      return;
+    }
+
     const msgId = await this._sendRaw(MessageType.MSG, peer, TargetType.USER, ciphertext);
     
     this.dispatch({

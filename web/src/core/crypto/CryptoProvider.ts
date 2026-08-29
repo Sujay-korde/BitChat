@@ -6,13 +6,20 @@ export interface CryptoProvider {
   decrypt(sender: string, ciphertext: string): Promise<string>;
 }
 
+export class CryptoNotAvailableError extends Error {
+  constructor(message: string = "Cryptography is not yet implemented.") {
+    super(message);
+    this.name = "CryptoNotAvailableError";
+  }
+}
+
 /**
  * EXPERIMENTAL PLACEHOLDER
  * NOT READY FOR PRODUCTION
  * 
- * This class DOES NOT perform actual X25519/AES-GCM encryption.
- * It passes through plaintext for the sake of frontend UI development
- * until WebCrypto interoperability is verified in Phase 5C.
+ * This class DOES NOT perform actual cryptography.
+ * To maintain the ciphertext-only invariant, it is now FAIL-CLOSED.
+ * It will throw an error if encryption or decryption is attempted.
  */
 export class DummyCryptoProvider implements CryptoProvider {
   async generateIdentity(): Promise<void> {}
@@ -21,13 +28,11 @@ export class DummyCryptoProvider implements CryptoProvider {
   }
   async deriveSharedKey(_peerPublicKey: string): Promise<void> {}
   
-  async encrypt(_target: string, plaintext: string): Promise<string> {
-    // FAKE ENCRYPTION - DO NOT USE IN PRODUCTION
-    return plaintext;
+  async encrypt(_target: string, _plaintext: string): Promise<string> {
+    throw new CryptoNotAvailableError();
   }
   
-  async decrypt(_sender: string, ciphertext: string): Promise<string> {
-    // FAKE DECRYPTION - DO NOT USE IN PRODUCTION
-    return ciphertext;
+  async decrypt(_sender: string, _ciphertext: string): Promise<string> {
+    throw new CryptoNotAvailableError();
   }
 }

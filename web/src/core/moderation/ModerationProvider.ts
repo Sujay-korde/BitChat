@@ -7,6 +7,8 @@ export interface ModerationProvider {
  * NOT READY FOR PRODUCTION
  * 
  * This merely simulates local moderation passes/fails.
+ * DO NOT MISTAKE THIS FOR THE PRODUCTION MODERATION SYSTEM.
+ * This is a development implementation only.
  */
 export class DummyModerationProvider implements ModerationProvider {
   async moderate(text: string): Promise<boolean> {

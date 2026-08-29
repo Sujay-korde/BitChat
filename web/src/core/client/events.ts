@@ -60,6 +60,10 @@ export interface ErrorOccurred extends AppEvent {
   reason: string;
 }
 
+export interface EncryptionUnavailable extends AppEvent {
+  type: "EncryptionUnavailable";
+}
+
 export type SecureChatEvent = 
   | ConnectionChanged 
   | MessageReceived 
@@ -67,6 +71,7 @@ export type SecureChatEvent =
   | PresenceChanged 
   | KeyExchangeCompleted 
   | ModerationRejected 
-  | ErrorOccurred;
+  | ErrorOccurred
+  | EncryptionUnavailable;
 
 export type EventCallback = (event: SecureChatEvent) => void;

@@ -112,4 +112,35 @@ describe('SecureChatClient', () => {
     expect(rejected).toBe(true);
     expect(transport.sentFrames.length).toBe(0);
   });
+
+  it('should not call sendFrame or transmit plaintext if crypto is unavailable', async () => {
+    class FailClosedCrypto extends MockCrypto {
+      async encrypt(target: string, text: string): Promise<string> { 
+        throw new Error("CryptoUnavailable"); 
+      }
+    }
+    const failClient = new SecureChatClient(transport, new FailClosedCrypto(), new MockModeration());
+    
+    let encUnavailable = false;
+    failClient.onEvent(e => {
+      if (e.type === 'EncryptionUnavailable') encUnavailable = true;
+    });
+
+    transport.injectFrame({
+      type: "AUTH_OK", msg_id: "s-1", sender: "server", target: "alice", target_type: "user", timestamp: 123, payload: "ok"
+    });
+    
+    const connectPromise = failClient.connect("alice");
+    await new Promise(r => setTimeout(r, 50));
+    await connectPromise;
+    
+    transport.sentFrames = [];
+    await failClient.sendDirectMessage("bob", "secret plaintext message");
+    
+    expect(encUnavailable).toBe(true);
+    expect(transport.sentFrames.length).toBe(0);
+    
+    const anyPlaintext = JSON.stringify(transport.sentFrames).includes("secret plaintext message");
+    expect(anyPlaintext).toBe(false);
+  });
 });
