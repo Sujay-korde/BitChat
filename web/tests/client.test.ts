@@ -32,8 +32,11 @@ class MockCrypto implements CryptoProvider {
   async generateIdentity() {}
   async getPublicKey(sender: string, target: string) { return "pub"; }
   async deriveSharedKey(sender: string, target: string, payload: string) { return "dummy-key"; }
-  async encrypt(target: string | Uint8Array, text: string) { return `enc-${text}`; }
-  async decrypt(sender: string | Uint8Array, text: string) { return text.replace('enc-', ''); }
+  async encrypt(target: string | Uint8Array, text: string, aad?: Uint8Array) { return `enc-${text}`; }
+  async decrypt(sender: string | Uint8Array, text: string, aad?: Uint8Array) { 
+    if (aad && text.includes("bad-aad")) throw new Error("bad aad");
+    return text.replace('enc-', ''); 
+  }
 }
 
 class MockModeration implements ModerationProvider {
@@ -96,7 +99,10 @@ describe('SecureChatClient', () => {
     const msgFrame = transport.sentFrames[0];
     expect(msgFrame.type).toBe("MSG");
     expect(msgFrame.target).toBe("bob");
-    expect(msgFrame.payload).toBe("enc-hello"); 
+    const payload = JSON.parse(msgFrame.payload);
+    expect(payload.ciphertext).toBe("enc-hello"); 
+    expect(payload.key_version).toBe(0);
+    expect(payload.sequence_number).toBe(1);
   });
 
   it('should block bad words in moderation', async () => {

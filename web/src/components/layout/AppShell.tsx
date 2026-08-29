@@ -6,13 +6,13 @@ import { ContextPanel } from '../context/ContextPanel';
 import { TopBar } from './TopBar';
 import { ConnectionIndicator } from './ConnectionIndicator';
 import { client } from '../../App';
+import { useConversationStore } from '../../state/conversationStore';
 
 export function AppShell() {
   // Mobile responsive state (which pane is active)
   const [activePane, setActivePane] = useState<'nav' | 'conversation' | 'context'>('conversation');
   
-  // Placeholder for when we actually select a peer to converse with
-  const activePeer = null;
+  const { activePeer } = useConversationStore();
 
   return (
     <div className={styles.shell}>

@@ -1,7 +1,8 @@
 import styles from './ConversationArea.module.css';
 import { ConversationHeader } from './ConversationHeader';
 import { ConversationEmptyState } from './ConversationEmptyState';
-import { ComposerPlaceholder } from './ComposerPlaceholder';
+import { Composer } from './Composer';
+import { MessageList } from './MessageList';
 
 interface ConversationAreaProps {
   activePeer: string | null;
@@ -20,10 +21,10 @@ export function ConversationArea({ activePeer }: ConversationAreaProps) {
     <main className={styles.area} aria-label="Conversation">
       <ConversationHeader peer={activePeer} />
       <div className={styles.messageList} role="log" aria-live="polite">
-        {/* Placeholder for message list */}
+        <MessageList activePeer={activePeer} />
       </div>
       <div className={styles.composerWrapper}>
-        <ComposerPlaceholder />
+        <Composer activePeer={activePeer} />
       </div>
     </main>
   );

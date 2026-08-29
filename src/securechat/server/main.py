@@ -269,6 +269,10 @@ class ChatServer:
             logger.info("KEY_EXCHANGE: %s -> %s", username, action.payload["target"])
             await self._relay_key_exchange(username, action.payload)
 
+        elif action.kind == "room_key":
+            logger.info("ROOM_KEY: %s -> %s", username, action.payload["target"])
+            await self._relay_room_key(username, action.payload)
+
         elif action.kind == "message":
             logger.info("MSG: %s -> %s [id=%s]", username, action.payload["target"], action.payload["msg_id"])
             await self._relay_ciphertext(action.payload)
@@ -299,6 +303,17 @@ class ChatServer:
         if target in self.sessions:
             session = self.sessions[target]
             message = self._response(MessageType.KEY_EXCHANGE, sender, target, TargetType.USER.value, payload["payload"])
+            try:
+                await session.send_fn(message)
+            except Exception:
+                pass
+
+    async def _relay_room_key(self, username: str, payload: dict[str, str]) -> None:
+        target = payload["target"]
+        sender = payload["sender"]
+        if target in self.sessions:
+            session = self.sessions[target]
+            message = self._response(MessageType.ROOM_KEY, sender, target, TargetType.USER.value, payload["payload"])
             try:
                 await session.send_fn(message)
             except Exception:

@@ -36,4 +36,6 @@ class MessageRouter:
             return RoutedAction("heartbeat", {"username": envelope.sender})
         if envelope.type == MessageType.KEY_EXCHANGE:
             return RoutedAction("key_exchange", {"sender": envelope.sender, "target": envelope.target, "payload": envelope.payload})
+        if envelope.type == MessageType.ROOM_KEY:
+            return RoutedAction("room_key", {"sender": envelope.sender, "target": envelope.target, "payload": envelope.payload})
         return RoutedAction("error", {"reason": f"Unsupported message type: {envelope.type}"})

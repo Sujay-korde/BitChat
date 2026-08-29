@@ -141,7 +141,12 @@ export class WebCryptoProvider implements CryptoProvider {
     }
   }
 
-  async encrypt(targetRawKey: string | Uint8Array, plaintext: string): Promise<string> {
+  async generateRoomKey(): Promise<Uint8Array> {
+    const rawKey = crypto.getRandomValues(new Uint8Array(32)); // 256-bit AES key
+    return rawKey;
+  }
+
+  async encrypt(targetRawKey: string | Uint8Array, plaintext: string, aad?: Uint8Array): Promise<string> {
     try {
       let keyBytes: Uint8Array;
       if (typeof targetRawKey === 'string') {
@@ -164,7 +169,8 @@ export class WebCryptoProvider implements CryptoProvider {
       const ciphertextBuffer = await crypto.subtle.encrypt(
         {
           name: "AES-GCM",
-          iv: nonce as unknown as BufferSource
+          iv: nonce as unknown as BufferSource,
+          additionalData: aad as unknown as BufferSource | undefined
         },
         cryptoKey,
         encodedPayload as unknown as BufferSource
@@ -180,7 +186,7 @@ export class WebCryptoProvider implements CryptoProvider {
     }
   }
 
-  async decrypt(senderRawKey: string | Uint8Array, ciphertextB64: string): Promise<string> {
+  async decrypt(senderRawKey: string | Uint8Array, ciphertextB64: string, aad?: Uint8Array): Promise<string> {
     try {
       let keyBytes: Uint8Array;
       if (typeof senderRawKey === 'string') {
@@ -208,7 +214,8 @@ export class WebCryptoProvider implements CryptoProvider {
       const plaintextBuffer = await crypto.subtle.decrypt(
         {
           name: "AES-GCM",
-          iv: nonce as unknown as BufferSource
+          iv: nonce as unknown as BufferSource,
+          additionalData: aad as unknown as BufferSource | undefined
         },
         cryptoKey,
         ciphertext as unknown as BufferSource

@@ -11,20 +11,29 @@ export interface Message {
 
 interface ConversationStateStore {
   messages: Record<string, Message[]>;
-  presence: Record<string, string>; // room:user -> status
+  presence: Record<string, string>; // room:user -> status or peer -> status
   rooms: string[];
+  activePeer: string | null;
+  roomSequences: Record<string, Record<string, number>>; // room -> sender -> sequence
   
+  setActivePeer: (peer: string | null) => void;
   addMessage: (target: string, message: Message) => void;
   updateMessageStatus: (msgId: string, status: MessageState) => void;
   setPresence: (room: string, user: string, status: string) => void;
   joinRoom: (room: string) => void;
   leaveRoom: (room: string) => void;
+  setRoomKey: (room: string, version: number) => void; // only version is tracked
+  updateRoomSequence: (room: string, sender: string, sequence: number) => void;
 }
 
 export const useConversationStore = create<ConversationStateStore>((set) => ({
   messages: {},
   presence: {},
   rooms: [],
+  activePeer: null,
+  roomSequences: {},
+
+  setActivePeer: (peer) => set({ activePeer: peer }),
 
   addMessage: (target, message) => set((state) => ({
     messages: {
@@ -64,5 +73,19 @@ export const useConversationStore = create<ConversationStateStore>((set) => ({
   
   leaveRoom: (room) => set((state) => ({
     rooms: state.rooms.filter(r => r !== room)
+  })),
+
+  setRoomKey: () => set(() => ({
+    // For UI, we don't store the key, just trigger any re-renders if needed (e.g. to show encryption is active)
+  })),
+
+  updateRoomSequence: (room, sender, sequence) => set((state) => ({
+    roomSequences: {
+      ...state.roomSequences,
+      [room]: {
+        ...(state.roomSequences[room] || {}),
+        [sender]: Math.max(sequence, state.roomSequences[room]?.[sender] || 0)
+      }
+    }
   })),
 }));

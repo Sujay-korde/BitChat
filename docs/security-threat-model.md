@@ -9,8 +9,8 @@ This document details the exact security properties and vulnerabilities of the c
 | **Passive Network Observer** | **PROTECTED** | TLS/WSS secures the transport. Even if TLS is stripped, end-to-end payloads are encrypted with AES-256-GCM. Passive observers cannot decrypt payloads without the shared keys. |
 | **Malicious Server (Reading)** | **PROTECTED** | The server acts only as a ciphertext relay and reads routing metadata (`sender`, `target`, `msg_id`). It never sees plaintexts and does not possess private/shared keys. |
 | **Malicious Server (Tampering)** | **PROTECTED** | AES-GCM generates a 16-byte authentication tag. Any tampering with the ciphertext or nonce will fail decryption (`InvalidTag` in Python or `OperationError` in JS). |
-| **Malicious Server (Replay)** | **NOT PROTECTED** | The protocol lacks sequence numbers or cryptographic timestamp binding inside the ciphertext. A server or MITM can capture a valid encrypted `MSG` and replay it indefinitely. |
-| **Malicious Server (Spoofing/Routing)** | **NOT PROTECTED** | The AES-GCM encryption does not use Associated Data (AAD) to bind the routing envelope (`sender`, `target`). A malicious router can spoof the `sender` identity for users who share the same AES key (e.g., in a Room). |
+| **Malicious Server (Replay)** | **PROTECTED** | The protocol uses explicit `sequence_number` tracking bound via AAD for room messages and DMs. The unified `_handle_frame` logic tracks per-sender monotonic sequence numbers; an identical replay of a valid ciphertext is immediately rejected. |
+| **Malicious Server (Spoofing/Routing)** | **PROTECTED** | The AES-GCM encryption uses Associated Data (AAD) to cryptographically bind the routing envelope (`sender`, `target`, `room_id`, `key_version`). A malicious router cannot spoof the `sender` identity or move messages between rooms, as any alteration triggers an authentication tag failure. |
 | **Man-in-the-Middle (Key Exchange)** | **PROTECTED** | The `KEY_EXCHANGE` protocol now uses Signed Ephemeral Keys via long-term Ed25519 Identity Keys. Active MITM attacks attempting to substitute ephemeral keys are detected via signature validation failure. |
 | **Compromised Endpoints** | **NOT PROTECTED** | Memory scraping, malware, or XSS can extract keys directly from the JS heap or Python process memory. |
 
@@ -24,10 +24,10 @@ This document details the exact security properties and vulnerabilities of the c
 | Wrong-key decryption rejected | **PROTECTED** | `test_wrong_key` passes. |
 | Peer identity authenticated | **PROTECTED** | `KEY_EXCHANGE` is signed by a long-term Ed25519 Identity Key. |
 | MITM resistance | **PROTECTED** | `test_key_exchange_mitm_protection` passes. Ephemeral keys are bound to the Identity Key via cryptographic signatures. |
-| Replay protection | **NOT PROTECTED** | Missing sequence tracking and cryptographic timestamps. |
-| Message metadata authenticity | **NOT PROTECTED** | AES-GCM AAD is `None`. Routing metadata can be manipulated without failing decryption. |
-| Room isolation | **NOT PROTECTED** | Room keys are stubs and not rotated. Currently hardcoded in tests (`alice.shared_keys["room_x"]`). |
-| Room forward secrecy | **NOT PROTECTED** | Room keys do not rotate on join/leave. |
+| Replay protection | **PROTECTED** | Implemented sequence tracking and cryptographic timestamps via AAD; `test_dm_replay_and_aad_tampering` confirms strict sequence enforcement for DMs. |
+| Message metadata authenticity | **PROTECTED** | AES-GCM AAD now securely binds metadata like `room_id`, `sender`, and `key_version` to the ciphertext. |
+| Room isolation | **PROTECTED** | Room keys are securely generated via `WebCrypto` and distributed using E2E pairwise channels. |
+| Room forward secrecy | **PARTIALLY PROTECTED** | Room keys rotate (epochs) when a member leaves (via new key distribution), but there is no per-message Double Ratchet forward secrecy. |
 | Forward secrecy | **NOT PROTECTED** | Ephemeral keys remain static for the entire application session lifecycle. |
 | Post-compromise security | **NOT PROTECTED** | No key ratcheting implemented (e.g., Double Ratchet). |
 | Private keys protected from persistence | **PROTECTED** | Keys generated and stored only in RAM (no `localStorage`). |
@@ -50,17 +50,17 @@ This document details the exact security properties and vulnerabilities of the c
 
 ### AES-256-GCM
 * **Status**: Correctly implemented for payload confidentiality and payload integrity.
-* **Weakness**: Does not use AAD to authenticate the `MessageEnvelope` routing metadata.
+* **AAD Extension**: Implemented deterministic AAD formatting (Version, Type, TargetType, Target, KeyVersion, Sender, Sequence) ensuring routing metadata cannot be tampered with.
 
 ## Claims SecureChat CAN Safely Make
 * "Messages are encrypted client-side using AES-256-GCM before transmission."
 * "The server operates as a ciphertext relay and cannot decrypt or read the plaintext of messages."
 * "Browser and Python clients use highly interoperable, standards-compliant cryptographic primitives (X25519/HKDF/AES-GCM)."
-* "AES-GCM authentication tags detect any ciphertext tampering and incorrectly derived keys."
+* "AES-GCM authentication tags and AAD detect any ciphertext or routing metadata tampering."
 * "Client-side moderation successfully prevents restricted plaintexts from ever reaching the encryption layer or the network."
+* "Room Messaging is protected via distributed Shared Symmetric Keys that rotate upon membership changes, secured by the pairwise X25519 authenticated channel."
 
 ## Claims SecureChat MUST NOT Make
 * "Forward-secret" or "Post-compromise secure"
 * "Replay-proof" or "Spoof-proof"
 * "Military-grade" or "Unbreakable"
-* "Room confidentiality guaranteed" (since room keys are completely stubbed out).

@@ -2,8 +2,9 @@ export interface CryptoProvider {
   generateIdentity(): Promise<void>;
   getPublicKey(sender: string, target: string): Promise<string>;
   deriveSharedKey(sender: string, target: string, peerPayloadJson: string): Promise<string | Uint8Array>;
-  encrypt(target: string | Uint8Array, plaintext: string): Promise<string>;
-  decrypt(sender: string | Uint8Array, ciphertext: string): Promise<string>;
+  encrypt(target: string | Uint8Array, plaintext: string, aad?: Uint8Array): Promise<string>;
+  decrypt(sender: string | Uint8Array, ciphertext: string, aad?: Uint8Array): Promise<string>;
+  generateRoomKey(): Promise<Uint8Array>;
 }
 
 export class CryptoNotAvailableError extends Error {
@@ -30,11 +31,15 @@ export class DummyCryptoProvider implements CryptoProvider {
     return "dummy-key";
   }
   
-  async encrypt(_target: string | Uint8Array, _plaintext: string): Promise<string> {
+  async encrypt(_target: string | Uint8Array, _plaintext: string, _aad?: Uint8Array): Promise<string> {
     throw new CryptoNotAvailableError();
   }
   
-  async decrypt(_sender: string | Uint8Array, _ciphertext: string): Promise<string> {
+  async decrypt(_sender: string | Uint8Array, _ciphertext: string, _aad?: Uint8Array): Promise<string> {
+    throw new CryptoNotAvailableError();
+  }
+
+  async generateRoomKey(): Promise<Uint8Array> {
     throw new CryptoNotAvailableError();
   }
 }

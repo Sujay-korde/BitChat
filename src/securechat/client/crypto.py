@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import struct
 from dataclasses import dataclass
 from typing import Any, Mapping
 
@@ -24,6 +25,7 @@ class ChatCrypto:
         self._identity_key = ed25519.Ed25519PrivateKey.generate()
         self._private_key = x25519.X25519PrivateKey.generate()
         self._public_key = self._private_key.public_key()
+        self.peer_identity_keys: dict[str, bytes] = {}
 
     @property
     def public_key_bytes(self) -> bytes:
@@ -56,6 +58,14 @@ class ChatCrypto:
         sig = base64.b64decode(data["signature"].encode("ascii"))
         
         identity_key = ed25519.Ed25519PublicKey.from_public_bytes(identity_pub)
+        
+        # TOFU: Trust On First Use during session
+        if sender in self.peer_identity_keys:
+            if self.peer_identity_keys[sender] != identity_pub:
+                raise ValueError("Identity key mismatch (potential MITM)")
+        else:
+            self.peer_identity_keys[sender] = identity_pub
+            
         msg = b"SecureChat-Identity-Binding-V1" + sender.encode("utf-8") + target.encode("utf-8") + ephemeral_pub
         
         identity_key.verify(sig, msg)
@@ -73,19 +83,30 @@ class ChatCrypto:
         ).derive(shared_secret)
 
     @staticmethod
-    def encrypt(shared_key: bytes, payload: Mapping[str, Any]) -> str:
+    def encrypt(shared_key: bytes, payload: Mapping[str, Any], aad: bytes | None = None) -> str:
         nonce = os.urandom(12)
         aesgcm = AESGCM(shared_key)
-        ciphertext = aesgcm.encrypt(nonce, json.dumps(payload).encode("utf-8"), None)
+        ciphertext = aesgcm.encrypt(nonce, json.dumps(payload).encode("utf-8"), aad)
         return base64.b64encode(nonce + ciphertext).decode("ascii")
 
     @staticmethod
-    def decrypt(shared_key: bytes, payload_b64: str) -> dict[str, Any]:
+    def decrypt(shared_key: bytes, payload_b64: str, aad: bytes | None = None) -> dict[str, Any]:
         raw = base64.b64decode(payload_b64.encode("ascii"))
         nonce, ciphertext = raw[:12], raw[12:]
         aesgcm = AESGCM(shared_key)
         try:
-            plaintext = aesgcm.decrypt(nonce, ciphertext, None)
+            plaintext = aesgcm.decrypt(nonce, ciphertext, aad)
         except InvalidTag as exc:
             raise ValueError("Message authentication failed") from exc
         return json.loads(plaintext.decode("utf-8"))
+
+    @staticmethod
+    def build_aad(protocol_version: int, msg_type: str, target_type: str, target: str, key_version: int, sender: str, sequence: int) -> bytes:
+        aad = bytearray([protocol_version])
+        aad += msg_type.encode("utf-8")
+        aad += target_type.encode("utf-8")
+        aad += target.encode("utf-8")
+        aad += struct.pack(">I", key_version)
+        aad += sender.encode("utf-8")
+        aad += struct.pack(">Q", sequence)
+        return bytes(aad)

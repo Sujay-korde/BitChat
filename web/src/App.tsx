@@ -26,14 +26,19 @@ function App() {
         case "ConnectionChanged":
           setState(event.state);
           break;
-        case "MessageReceived":
-          addMessage(event.target, {
+        case "MessageReceived": {
+          const currentUsername = useConnectionStore.getState().username;
+          // If we are the target (DM to us), map the conversation to the sender.
+          // Otherwise (e.g. room), target remains the target.
+          const conversationTarget = event.target === currentUsername ? event.sender : event.target;
+          addMessage(conversationTarget, {
             id: Date.now().toString(),
             sender: event.sender,
             text: event.text,
             timestamp: Date.now(),
           });
           break;
+        }
         case "MessageStatusChanged":
           updateMessageStatus(event.msg_id, event.state);
           break;

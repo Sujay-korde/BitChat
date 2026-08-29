@@ -7,6 +7,7 @@ export const MessageType = {
   LEAVE: "LEAVE",
   MSG: "MSG",
   ACK: "ACK",
+  ROOM_KEY: "ROOM_KEY",
   PRESENCE: "PRESENCE",
   HEARTBEAT: "HEARTBEAT",
   MODERATION_WARN: "MODERATION_WARN",

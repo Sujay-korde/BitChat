@@ -15,6 +15,11 @@ export class SecureChatClient {
   private state: ConnectionState = ConnectionState.DISCONNECTED;
   private listeners: EventCallback[] = [];
   private sharedKeys: Map<string, string | Uint8Array> = new Map();
+  private roomKeys: Map<string, { key: Uint8Array, version: number }> = new Map();
+  private roomSequences: Map<string, Map<string, number>> = new Map();
+  private myRoomSequences: Map<string, number> = new Map();
+  private dmSequences: Map<string, number> = new Map();
+  private myDmSequences: Map<string, number> = new Map();
   
   private heartbeatInterval: any = null;
   private shouldReconnect: boolean = true;
@@ -120,19 +125,88 @@ export class SecureChatClient {
         this.dispatch({ type: "ErrorOccurred", reason: `Auth failed: ${envelope.payload}` });
         this.disconnect();
         break;
+      case MessageType.ROOM_KEY:
+        try {
+          // Payload is encrypted with pairwise key
+          const senderKey = this.sharedKeys.get(envelope.sender);
+          if (!senderKey) throw new Error("No shared key for room key distribution");
+          
+          const decryptedPayload = await this.crypto.decrypt(senderKey, envelope.payload);
+          const data = JSON.parse(decryptedPayload);
+          
+          if (!data.room_id || !data.key_version || !data.room_key) {
+            throw new Error("Invalid room key payload");
+          }
+          
+          const rawKey = new Uint8Array(atob(data.room_key).split('').map(c => c.charCodeAt(0)));
+          this.roomKeys.set(data.room_id, { key: rawKey, version: data.key_version });
+          console.log(`Received room key for ${data.room_id}, v${data.key_version}`);
+        } catch (e) {
+          console.error("Failed to process ROOM_KEY", e);
+        }
+        break;
       case MessageType.MSG:
         try {
-          const keyTarget = envelope.target_type === TargetType.ROOM ? envelope.target : envelope.sender;
-          const sharedKey = this.sharedKeys.get(keyTarget);
-          if (!sharedKey) throw new Error("No shared key");
-          
-          const plaintext = await this.crypto.decrypt(sharedKey, envelope.payload);
-          this.dispatch({
-            type: "MessageReceived",
-            sender: envelope.sender,
-            target: envelope.target,
-            text: plaintext
-          });
+          if (envelope.target_type === TargetType.ROOM) {
+            const roomCtx = this.roomKeys.get(envelope.target);
+            if (!roomCtx) throw new Error("No room key");
+            
+            // For room MSG, payload is JSON containing { key_version, sequence_number, ciphertext }
+            const data = JSON.parse(envelope.payload);
+            if (data.key_version !== roomCtx.version) {
+              throw new Error("Message key version mismatch");
+            }
+            
+            // Check sequence number for replay protection
+            let roomSeqs = this.roomSequences.get(envelope.target);
+            if (!roomSeqs) {
+              roomSeqs = new Map();
+              this.roomSequences.set(envelope.target, roomSeqs);
+            }
+            const lastSeq = roomSeqs.get(envelope.sender) || 0;
+            if (data.sequence_number <= lastSeq) {
+              throw new Error("Message rejected: Replay detected");
+            }
+            
+            const aad = this._buildAAD(1, envelope.type, envelope.target_type, envelope.target, data.key_version, envelope.sender, data.sequence_number);
+            const plaintext = await this.crypto.decrypt(roomCtx.key, data.ciphertext, aad);
+            
+            // Update sequence
+            roomSeqs.set(envelope.sender, data.sequence_number);
+            
+            this.dispatch({
+              type: "MessageReceived",
+              sender: envelope.sender,
+              target: envelope.target,
+              text: plaintext
+            });
+          } else {
+            const sharedKey = this.sharedKeys.get(envelope.sender);
+            if (!sharedKey) throw new Error("No shared key");
+            
+            const data = JSON.parse(envelope.payload);
+            if (data.key_version !== 0) {
+              throw new Error("Invalid key version for DM");
+            }
+            
+            const seq = data.sequence_number || 0;
+            const lastSeq = this.dmSequences.get(envelope.sender) || 0;
+            if (seq <= lastSeq) {
+              throw new Error("Message rejected: Replay detected");
+            }
+            
+            const aad = this._buildAAD(1, envelope.type, envelope.target_type, envelope.target, 0, envelope.sender, seq);
+            const plaintext = await this.crypto.decrypt(sharedKey, data.ciphertext, aad);
+            
+            this.dmSequences.set(envelope.sender, seq);
+            
+            this.dispatch({
+              type: "MessageReceived",
+              sender: envelope.sender,
+              target: envelope.target,
+              text: plaintext
+            });
+          }
         } catch (e) {
           console.error("Failed to decrypt message", e);
           this.dispatch({ type: "EncryptionUnavailable" });
@@ -207,8 +281,41 @@ export class SecureChatClient {
     return envelope.msg_id;
   }
 
+  private _buildAAD(protocolVersion: number, msgType: string, targetType: string, target: string, keyVersion: number, sender: string, sequenceNumber: number): Uint8Array {
+    const encoder = new TextEncoder();
+    
+    // KeyVersion is 4-byte BigEndian
+    const kvBuf = new ArrayBuffer(4);
+    new DataView(kvBuf).setUint32(0, keyVersion, false); // false = big endian
+    
+    // SequenceNumber is 8-byte BigEndian
+    const snBuf = new ArrayBuffer(8);
+    // Number is 53-bit safe in JS, we can just setBigUint64
+    new DataView(snBuf).setBigUint64(0, BigInt(sequenceNumber), false);
+
+    const parts = [
+      new Uint8Array([protocolVersion]),
+      encoder.encode(msgType),
+      encoder.encode(targetType),
+      encoder.encode(target),
+      new Uint8Array(kvBuf),
+      encoder.encode(sender),
+      new Uint8Array(snBuf)
+    ];
+
+    const totalLen = parts.reduce((acc, val) => acc + val.length, 0);
+    const result = new Uint8Array(totalLen);
+    let offset = 0;
+    for (const part of parts) {
+      result.set(part, offset);
+      offset += part.length;
+    }
+    return result;
+  }
+
   async sendRoomMessage(room: string, text: string) {
     if (this.state !== ConnectionState.READY) throw new Error("Not ready");
+    if (!this.username) throw new Error("Not authenticated");
     
     const isValid = await this.moderation.moderate(text);
     if (!isValid) {
@@ -216,17 +323,29 @@ export class SecureChatClient {
       return;
     }
 
-    let ciphertext: string;
+    let payloadJson: string;
     try {
-      const sharedKey = this.sharedKeys.get(room);
-      if (!sharedKey) throw new Error("No shared key for room");
-      ciphertext = await this.crypto.encrypt(sharedKey, text);
+      const roomCtx = this.roomKeys.get(room);
+      if (!roomCtx) throw new Error("No room key for room");
+      
+      const seq = (this.myRoomSequences.get(room) || 0) + 1;
+      this.myRoomSequences.set(room, seq);
+
+      const aad = this._buildAAD(1, MessageType.MSG, TargetType.ROOM, room, roomCtx.version, this.username, seq);
+      const ciphertext = await this.crypto.encrypt(roomCtx.key, text, aad);
+      
+      const payload = {
+        key_version: roomCtx.version,
+        sequence_number: seq,
+        ciphertext
+      };
+      payloadJson = JSON.stringify(payload);
     } catch (e) {
       this.dispatch({ type: "EncryptionUnavailable" });
       return;
     }
 
-    const msgId = await this._sendRaw(MessageType.MSG, room, TargetType.ROOM, ciphertext);
+    const msgId = await this._sendRaw(MessageType.MSG, room, TargetType.ROOM, payloadJson);
     
     this.dispatch({
       type: "MessageStatusChanged",
@@ -244,17 +363,29 @@ export class SecureChatClient {
       return;
     }
 
-    let ciphertext: string;
+    let payloadJson: string;
     try {
       const sharedKey = this.sharedKeys.get(peer);
       if (!sharedKey) throw new Error("No shared key for peer");
-      ciphertext = await this.crypto.encrypt(sharedKey, text);
+      
+      const seq = (this.myDmSequences.get(peer) || 0) + 1;
+      this.myDmSequences.set(peer, seq);
+      
+      const aad = this._buildAAD(1, MessageType.MSG, TargetType.USER, peer, 0, this.username, seq);
+      const ciphertext = await this.crypto.encrypt(sharedKey, text, aad);
+      
+      const payload = {
+        key_version: 0,
+        sequence_number: seq,
+        ciphertext
+      };
+      payloadJson = JSON.stringify(payload);
     } catch (e) {
       this.dispatch({ type: "EncryptionUnavailable" });
       return;
     }
 
-    const msgId = await this._sendRaw(MessageType.MSG, peer, TargetType.USER, ciphertext);
+    const msgId = await this._sendRaw(MessageType.MSG, peer, TargetType.USER, payloadJson);
     
     this.dispatch({
       type: "MessageStatusChanged",
@@ -278,5 +409,33 @@ export class SecureChatClient {
   async leaveRoom(room: string) {
     if (this.state !== ConnectionState.READY) throw new Error("Not ready");
     await this._sendRaw(MessageType.LEAVE, room, TargetType.ROOM, "");
+  }
+
+  async generateAndDistributeRoomKey(room: string, members: string[]) {
+    if (!this.username) throw new Error("Not authenticated");
+    const rawKey = await this.crypto.generateRoomKey();
+    const currentVersion = this.roomKeys.get(room)?.version || 0;
+    const newVersion = currentVersion + 1;
+    
+    this.roomKeys.set(room, { key: rawKey, version: newVersion });
+    
+    const roomKeyBase64 = btoa(String.fromCharCode(...rawKey));
+    const payload = JSON.stringify({
+      room_id: room,
+      key_version: newVersion,
+      room_key: roomKeyBase64
+    });
+
+    for (const member of members) {
+      if (member === this.username) continue;
+      const sharedKey = this.sharedKeys.get(member);
+      if (!sharedKey) {
+        console.warn(`No pairwise key to distribute room key to ${member}`);
+        continue; // Could queue or throw, for now warn
+      }
+      
+      const ciphertext = await this.crypto.encrypt(sharedKey, payload);
+      await this._sendRaw(MessageType.ROOM_KEY, member, TargetType.USER, ciphertext);
+    }
   }
 }
