@@ -1,4 +1,4 @@
-import { x25519 } from '@noble/curves/ed25519.js';
+import { x25519, ed25519 } from '@noble/curves/ed25519.js';
 import type { CryptoProvider } from './CryptoProvider';
 import { CryptoNotAvailableError } from './CryptoProvider';
 
@@ -24,8 +24,10 @@ export class KeyExchangeError extends Error {
 }
 
 export class WebCryptoProvider implements CryptoProvider {
-  private privateKey: Uint8Array | null = null;
-  private publicKey: Uint8Array | null = null;
+  private identityPrivateKey: Uint8Array | null = null;
+  private identityPublicKey: Uint8Array | null = null;
+  private ephemeralPrivateKey: Uint8Array | null = null;
+  private ephemeralPublicKey: Uint8Array | null = null;
   
   // Convert byte array to Base64 string
   private bytesToBase64(bytes: Uint8Array): string {
@@ -48,24 +50,58 @@ export class WebCryptoProvider implements CryptoProvider {
   }
 
   async generateIdentity(): Promise<void> {
-    // noble-curves uses 32 bytes of secure random for x25519 private key
-    this.privateKey = x25519.utils.randomSecretKey();
-    this.publicKey = x25519.getPublicKey(this.privateKey);
+    this.identityPrivateKey = ed25519.utils.randomSecretKey();
+    this.identityPublicKey = ed25519.getPublicKey(this.identityPrivateKey);
+
+    this.ephemeralPrivateKey = x25519.utils.randomSecretKey();
+    this.ephemeralPublicKey = x25519.getPublicKey(this.ephemeralPrivateKey);
   }
 
-  async getPublicKey(): Promise<string> {
-    if (!this.publicKey) throw new CryptoNotAvailableError("Identity not generated");
-    return this.bytesToBase64(this.publicKey);
+  async getPublicKey(sender: string, target: string): Promise<string> {
+    if (!this.identityPrivateKey || !this.ephemeralPublicKey || !this.identityPublicKey) {
+      throw new CryptoNotAvailableError("Identity not generated");
+    }
+    const encoder = new TextEncoder();
+    const msg = new Uint8Array([
+      ...encoder.encode("SecureChat-Identity-Binding-V1"),
+      ...encoder.encode(sender),
+      ...encoder.encode(target),
+      ...this.ephemeralPublicKey
+    ]);
+    const sig = ed25519.sign(msg, this.identityPrivateKey);
+
+    const payload = {
+      identity_key: this.bytesToBase64(this.identityPublicKey),
+      ephemeral_key: this.bytesToBase64(this.ephemeralPublicKey),
+      signature: this.bytesToBase64(sig)
+    };
+    return JSON.stringify(payload);
   }
 
-  async deriveSharedKey(peerPublicKeyB64: string): Promise<Uint8Array> {
-    if (!this.privateKey) throw new CryptoNotAvailableError("Identity not generated");
+  async deriveSharedKey(sender: string, target: string, peerPayloadJson: string): Promise<Uint8Array> {
+    if (!this.ephemeralPrivateKey) throw new CryptoNotAvailableError("Identity not generated");
     
     try {
-      const peerPublicKey = this.base64ToBytes(peerPublicKeyB64);
+      const data = JSON.parse(peerPayloadJson);
+      const identityPub = this.base64ToBytes(data.identity_key);
+      const ephemeralPub = this.base64ToBytes(data.ephemeral_key);
+      const sig = this.base64ToBytes(data.signature);
+
+      const encoder = new TextEncoder();
+      const msg = new Uint8Array([
+        ...encoder.encode("SecureChat-Identity-Binding-V1"),
+        ...encoder.encode(sender),
+        ...encoder.encode(target),
+        ...ephemeralPub
+      ]);
+
+      const isValid = ed25519.verify(sig, msg, identityPub);
+      if (!isValid) {
+        throw new Error("Invalid signature");
+      }
       
       // 1. X25519 DH Exchange to get shared secret
-      const sharedSecret = x25519.getSharedSecret(this.privateKey, peerPublicKey);
+      const sharedSecret = x25519.getSharedSecret(this.ephemeralPrivateKey, ephemeralPub);
       
       // 2. HKDF Derivation to match Python backend
       const importedSecret = await crypto.subtle.importKey(

@@ -1,7 +1,7 @@
 export interface CryptoProvider {
   generateIdentity(): Promise<void>;
-  getPublicKey(): Promise<string>;
-  deriveSharedKey(peerPublicKey: string): Promise<string | Uint8Array>;
+  getPublicKey(sender: string, target: string): Promise<string>;
+  deriveSharedKey(sender: string, target: string, peerPayloadJson: string): Promise<string | Uint8Array>;
   encrypt(target: string | Uint8Array, plaintext: string): Promise<string>;
   decrypt(sender: string | Uint8Array, ciphertext: string): Promise<string>;
 }
@@ -23,10 +23,10 @@ export class CryptoNotAvailableError extends Error {
  */
 export class DummyCryptoProvider implements CryptoProvider {
   async generateIdentity(): Promise<void> {}
-  async getPublicKey(): Promise<string> {
+  async getPublicKey(_sender: string, _target: string): Promise<string> {
     return "dummy-public-key";
   }
-  async deriveSharedKey(_peerPublicKey: string): Promise<string | Uint8Array> {
+  async deriveSharedKey(_sender: string, _target: string, _peerPayloadJson: string): Promise<string | Uint8Array> {
     return "dummy-key";
   }
   

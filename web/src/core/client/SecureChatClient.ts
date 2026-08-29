@@ -163,7 +163,8 @@ export class SecureChatClient {
         break;
       case MessageType.KEY_EXCHANGE:
         try {
-          const sharedKey = await this.crypto.deriveSharedKey(envelope.payload);
+          if (!this.username) throw new Error("Not authenticated");
+          const sharedKey = await this.crypto.deriveSharedKey(envelope.sender, this.username, envelope.payload);
           this.sharedKeys.set(envelope.sender, sharedKey);
           this.dispatch({ type: "KeyExchangeCompleted", peer: envelope.sender });
         } catch (e) {
@@ -260,6 +261,13 @@ export class SecureChatClient {
       msg_id: msgId,
       state: MessageState.PENDING
     });
+  }
+
+  async sendKeyExchange(target: string) {
+    if (this.state !== ConnectionState.READY) throw new Error("Not ready");
+    if (!this.username) throw new Error("Not authenticated");
+    const payload = await this.crypto.getPublicKey(this.username, target);
+    await this._sendRaw(MessageType.KEY_EXCHANGE, target, TargetType.USER, payload);
   }
 
   async joinRoom(room: string) {

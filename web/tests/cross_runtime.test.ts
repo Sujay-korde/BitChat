@@ -21,7 +21,7 @@ describe('Cross-Runtime Crypto Interoperability', () => {
   });
 
   it('Test A & B: Python <-> Browser full encrypt/decrypt', async () => {
-    const jsPubB64 = await jsCrypto.getPublicKey();
+    const jsPayload = await jsCrypto.getPublicKey("js", "py");
     const plaintextFromJs = "Hello from JavaScript!";
     
     // We will write a small python script that:
@@ -37,14 +37,12 @@ sys.path.insert(0, '../src')
 from securechat.client.crypto import ChatCrypto
 
 input_data = json.loads(sys.stdin.read())
-js_pub_b64 = input_data['jsPubB64']
-js_ciphertext = input_data['jsCiphertext']
-js_plaintext = input_data['jsPlaintext']
+js_payload = input_data['jsPayload']
 
 crypto = ChatCrypto()
-py_pub_b64 = base64.b64encode(crypto.public_key_bytes).decode('ascii')
+py_payload = crypto.get_key_exchange_payload("py", "js")
 
-shared_key = crypto.derive_shared_key(base64.b64decode(js_pub_b64.encode('ascii')))
+shared_key = crypto.verify_and_derive_shared_key("js", "py", js_payload)
 
 # Decrypt JS ciphertext
 try:
@@ -76,20 +74,21 @@ sys.path.insert(0, '../src')
 from securechat.client.crypto import ChatCrypto
 
 input_data = json.loads(sys.stdin.read())
-js_pub_b64 = input_data['jsPubB64']
+js_payload = input_data['jsPayload']
 
 crypto = ChatCrypto()
-py_pub_b64 = base64.b64encode(crypto.public_key_bytes).decode('ascii')
+py_payload = crypto.get_key_exchange_payload("py", "js")
 
-shared_key = crypto.derive_shared_key(base64.b64decode(js_pub_b64.encode('ascii')))
+shared_key = crypto.verify_and_derive_shared_key("js", "py", js_payload)
 py_ciphertext = crypto.encrypt(shared_key, {"text": "Message from Python"})
 
-# Print the private key bytes so we can use the same identity in step 2 (for testing only!)
 py_priv_b64 = base64.b64encode(crypto._private_key.private_bytes_raw()).decode('ascii')
+py_id_priv_b64 = base64.b64encode(crypto._identity_key.private_bytes_raw()).decode('ascii')
 
 print(json.dumps({
-    "pyPubB64": py_pub_b64,
+    "pyPayload": py_payload,
     "pyPrivB64": py_priv_b64,
+    "pyIdPrivB64": py_id_priv_b64,
     "pyCiphertext": py_ciphertext
 }))
 `;
@@ -98,19 +97,20 @@ print(json.dumps({
     fs.writeFileSync(pyFile1, pyScript1);
     
     const pyRes1 = execSync(PYTHON_EXECUTABLE + ' ' + pyFile1, {
-      input: JSON.stringify({ jsPubB64 }),
+      input: JSON.stringify({ jsPayload }),
       encoding: 'utf-8'
     });
     
     fs.unlinkSync(pyFile1);
     
     const pyData1 = JSON.parse(pyRes1);
-    const pyPubB64 = pyData1.pyPubB64;
+    const pyPayload = pyData1.pyPayload;
     const pyPrivB64 = pyData1.pyPrivB64;
+    const pyIdPrivB64 = pyData1.pyIdPrivB64;
     const pyCiphertext = pyData1.pyCiphertext;
 
     // Test A: Python -> Browser
-    const jsSharedKey = await jsCrypto.deriveSharedKey(pyPubB64);
+    const jsSharedKey = await jsCrypto.deriveSharedKey("py", "js", pyPayload);
     const decryptedPy = await jsCrypto.decrypt(jsSharedKey, pyCiphertext);
     
     // Py decrypted is actually a JSON string because JS decrypt returns plaintext directly,
@@ -125,20 +125,22 @@ print(json.dumps({
     const pyScript2 = `
 import sys, json, base64
 sys.path.insert(0, '../src')
-from cryptography.hazmat.primitives.asymmetric import x25519
+from cryptography.hazmat.primitives.asymmetric import x25519, ed25519
 from securechat.client.crypto import ChatCrypto
 
 input_data = json.loads(sys.stdin.read())
-js_pub_b64 = input_data['jsPubB64']
+js_payload = input_data['jsPayload']
 py_priv_b64 = input_data['pyPrivB64']
+py_id_priv_b64 = input_data['pyIdPrivB64']
 js_ciphertext = input_data['jsCiphertext']
 
 # Reconstruct Python crypto identity
 crypto = ChatCrypto()
 crypto._private_key = x25519.X25519PrivateKey.from_private_bytes(base64.b64decode(py_priv_b64.encode('ascii')))
 crypto._public_key = crypto._private_key.public_key()
+crypto._identity_key = ed25519.Ed25519PrivateKey.from_private_bytes(base64.b64decode(py_id_priv_b64.encode('ascii')))
 
-shared_key = crypto.derive_shared_key(base64.b64decode(js_pub_b64.encode('ascii')))
+shared_key = crypto.verify_and_derive_shared_key("js", "py", js_payload)
 decrypted = crypto.decrypt(shared_key, js_ciphertext)
 
 print(json.dumps({"decryptedText": decrypted.get("text")}))
@@ -148,7 +150,7 @@ print(json.dumps({"decryptedText": decrypted.get("text")}))
     fs.writeFileSync(pyFile2, pyScript2);
 
     const pyRes2 = execSync(PYTHON_EXECUTABLE + ' ' + pyFile2, {
-      input: JSON.stringify({ jsPubB64, pyPrivB64, jsCiphertext }),
+      input: JSON.stringify({ jsPayload, pyPrivB64, pyIdPrivB64, jsCiphertext }),
       encoding: 'utf-8'
     });
     

@@ -14,6 +14,13 @@ export class WebSocketTransport implements Transport {
     this.uri = uri;
   }
 
+  setUri(uri: string): void {
+    if (!this.isClosed) {
+      throw new TransportError("Cannot set URI while connected");
+    }
+    this.uri = uri;
+  }
+
   async connect(): Promise<void> {
     if (this.ws && !this.isClosed) {
       return;

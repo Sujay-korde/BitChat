@@ -14,11 +14,11 @@ describe('WebCryptoProvider Interoperability Guarantees', () => {
   });
 
   it('Test C: Browser <-> Browser encrypt/decrypt', async () => {
-    const alicePub = await alice.getPublicKey();
-    const bobPub = await bob.getPublicKey();
+    const alicePub = await alice.getPublicKey("alice", "bob");
+    const bobPub = await bob.getPublicKey("bob", "alice");
 
-    const aliceShared = await alice.deriveSharedKey(bobPub);
-    const bobShared = await bob.deriveSharedKey(alicePub);
+    const aliceShared = await alice.deriveSharedKey("bob", "alice", bobPub);
+    const bobShared = await bob.deriveSharedKey("alice", "bob", alicePub);
 
     const plaintext = "Hello from browser A to browser B!";
     
@@ -33,11 +33,11 @@ describe('WebCryptoProvider Interoperability Guarantees', () => {
   });
 
   it('Test D: Shared Secret Equality', async () => {
-    const alicePub = await alice.getPublicKey();
-    const bobPub = await bob.getPublicKey();
+    const alicePub = await alice.getPublicKey("alice", "bob");
+    const bobPub = await bob.getPublicKey("bob", "alice");
 
-    const aliceShared = await alice.deriveSharedKey(bobPub);
-    const bobShared = await bob.deriveSharedKey(alicePub);
+    const aliceShared = await alice.deriveSharedKey("bob", "alice", bobPub);
+    const bobShared = await bob.deriveSharedKey("alice", "bob", alicePub);
 
     // Ensure they derived the exact same raw bytes
     expect(aliceShared).toEqual(bobShared);
@@ -46,11 +46,11 @@ describe('WebCryptoProvider Interoperability Guarantees', () => {
   });
 
   it('Test E: Tampering detection', async () => {
-    const alicePub = await alice.getPublicKey();
-    const bobPub = await bob.getPublicKey();
+    const alicePub = await alice.getPublicKey("alice", "bob");
+    const bobPub = await bob.getPublicKey("bob", "alice");
 
-    const aliceShared = await alice.deriveSharedKey(bobPub);
-    const bobShared = await bob.deriveSharedKey(alicePub);
+    const aliceShared = await alice.deriveSharedKey("bob", "alice", bobPub);
+    const bobShared = await bob.deriveSharedKey("alice", "bob", alicePub);
 
     const ciphertext = await alice.encrypt(aliceShared, "secret message");
     
@@ -77,13 +77,16 @@ describe('WebCryptoProvider Interoperability Guarantees', () => {
   it('Test F: Wrong Key', async () => {
     const eve = new WebCryptoProvider();
     await eve.generateIdentity();
-    const evePub = await eve.getPublicKey();
+    const evePub = await eve.getPublicKey("eve", "alice");
 
-    const alicePub = await alice.getPublicKey();
-    const bobPub = await bob.getPublicKey();
+    const alicePub = await alice.getPublicKey("alice", "bob");
+    const bobPub = await bob.getPublicKey("bob", "alice");
 
-    const aliceShared = await alice.deriveSharedKey(bobPub);
-    const eveShared = await eve.deriveSharedKey(alicePub);
+    const aliceShared = await alice.deriveSharedKey("bob", "alice", bobPub);
+    const bobShared = await bob.deriveSharedKey("alice", "bob", alicePub);
+
+    const aliceToEvePub = await alice.getPublicKey("alice", "eve");
+    const eveShared = await eve.deriveSharedKey("alice", "eve", aliceToEvePub);
 
     const ciphertext = await alice.encrypt(aliceShared, "secret message to bob");
 
@@ -92,10 +95,10 @@ describe('WebCryptoProvider Interoperability Guarantees', () => {
   });
 
   it('Test G: Nonce Reuse Protection', async () => {
-    const alicePub = await alice.getPublicKey();
-    const bobPub = await bob.getPublicKey();
+    const alicePub = await alice.getPublicKey("alice", "bob");
+    const bobPub = await bob.getPublicKey("bob", "alice");
 
-    const aliceShared = await alice.deriveSharedKey(bobPub);
+    const aliceShared = await alice.deriveSharedKey("bob", "alice", bobPub);
 
     const ciphertext1 = await alice.encrypt(aliceShared, "message 1");
     const ciphertext2 = await alice.encrypt(aliceShared, "message 2");

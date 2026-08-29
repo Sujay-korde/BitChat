@@ -1,0 +1,59 @@
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.iconButton:hover:not(:disabled) {
+  color: var(--color-text-primary);
+}
+
+.iconButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Variants */
+.ghost {
+  background: transparent;
+}
+.ghost:hover:not(:disabled) {
+  background: var(--color-bg-surface-hover);
+}
+.ghost:active:not(:disabled) {
+  background: var(--color-bg-surface-active);
+}
+
+.surface {
+  background: var(--color-bg-surface-elevated);
+  border: 1px solid var(--color-border-subtle);
+}
+.surface:hover:not(:disabled) {
+  background: var(--color-bg-surface-hover);
+  border-color: var(--color-border);
+}
+
+/* Sizes */
+.sm {
+  width: 24px;
+  height: 24px;
+  padding: 4px;
+}
+.sm svg { width: 14px; height: 14px; }
+
+.md {
+  width: 32px;
+  height: 32px;
+  padding: 6px;
+}
+.md svg { width: 18px; height: 18px; }
+
+.lg {
+  width: 40px;
+  height: 40px;
+  padding: 8px;
+}
+.lg svg { width: 20px; height: 20px; }

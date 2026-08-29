@@ -30,10 +30,10 @@ class MockTransport implements Transport {
 
 class MockCrypto implements CryptoProvider {
   async generateIdentity() {}
-  async getPublicKey() { return "pub"; }
-  async deriveSharedKey() {}
-  async encrypt(target: string, text: string) { return `enc-${text}`; }
-  async decrypt(sender: string, text: string) { return text.replace('enc-', ''); }
+  async getPublicKey(sender: string, target: string) { return "pub"; }
+  async deriveSharedKey(sender: string, target: string, payload: string) { return "dummy-key"; }
+  async encrypt(target: string | Uint8Array, text: string) { return `enc-${text}`; }
+  async decrypt(sender: string | Uint8Array, text: string) { return text.replace('enc-', ''); }
 }
 
 class MockModeration implements ModerationProvider {
@@ -85,6 +85,11 @@ describe('SecureChatClient', () => {
     await client.connect("alice");
     await new Promise(r => setTimeout(r, 50));
     
+    transport.injectFrame({
+      type: "KEY_EXCHANGE", msg_id: "s-2", sender: "bob", target: "alice", target_type: "user", timestamp: 123, payload: "{}"
+    });
+    await new Promise(r => setTimeout(r, 50));
+    
     transport.sentFrames = [];
     await client.sendDirectMessage("bob", "hello");
     
@@ -133,6 +138,11 @@ describe('SecureChatClient', () => {
     const connectPromise = failClient.connect("alice");
     await new Promise(r => setTimeout(r, 50));
     await connectPromise;
+    
+    transport.injectFrame({
+      type: "KEY_EXCHANGE", msg_id: "s-2", sender: "bob", target: "alice", target_type: "user", timestamp: 123, payload: "{}"
+    });
+    await new Promise(r => setTimeout(r, 50));
     
     transport.sentFrames = [];
     await failClient.sendDirectMessage("bob", "secret plaintext message");

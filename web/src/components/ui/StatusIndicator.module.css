@@ -1,0 +1,26 @@
+.indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+.secure { background-color: var(--color-secure); }
+.warning { background-color: var(--color-warning); }
+.danger { background-color: var(--color-danger); }
+.info { background-color: var(--color-info); }
+.neutral { background-color: var(--color-text-muted); }
+
+.pulsing {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}

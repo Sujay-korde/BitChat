@@ -115,8 +115,8 @@ class SecureChatApp(Generic[TTransport]):
     async def send_key_exchange(self, target: str) -> None:
         if self.state != ConnectionState.READY:
             raise RuntimeError("Client is not ready")
-        pub_key_b64 = base64.b64encode(self.crypto.public_key_bytes).decode("ascii")
-        await self.transport.send_frame(self._message(MessageType.KEY_EXCHANGE, self.username, target, TargetType.USER, pub_key_b64))
+        payload_str = self.crypto.get_key_exchange_payload(self.username, target)
+        await self.transport.send_frame(self._message(MessageType.KEY_EXCHANGE, self.username, target, TargetType.USER, payload_str))
 
     async def listen(self) -> None:
         try:
@@ -148,9 +148,9 @@ class SecureChatApp(Generic[TTransport]):
 
         elif msg_type == MessageType.KEY_EXCHANGE.value:
             sender = frame["sender"]
+            target = frame["target"]
             try:
-                peer_pub_key = base64.b64decode(frame["payload"].encode("ascii"))
-                shared_key = self.crypto.derive_shared_key(peer_pub_key)
+                shared_key = self.crypto.verify_and_derive_shared_key(sender, target, frame["payload"])
                 self.shared_keys[sender] = shared_key
                 self._emit(KeyExchangeCompleted(sender))
             except Exception:

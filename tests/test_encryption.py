@@ -276,3 +276,48 @@ async def test_moderation_before_encryption_and_rejection(test_server):
         await alice.disconnect()
         await bob.disconnect()
 
+@pytest.mark.asyncio
+async def test_key_exchange_mitm_protection(test_server):
+    import json
+    alice = create_client("alice", 8889)
+    bob = create_client("bob", 8889)
+    await alice.connect()
+    await bob.connect()
+    
+    alice_task = asyncio.create_task(alice.listen())
+    bob_task = asyncio.create_task(bob.listen())
+    try:
+        while alice.state != ConnectionState.READY or bob.state != ConnectionState.READY:
+            await asyncio.sleep(0.01)
+            
+        # Mallory (MITM) tries to spoof Alice's key exchange
+        mallory_crypto = ChatCrypto()
+        
+        payload_str = alice.crypto.get_key_exchange_payload("alice", "bob")
+        payload_data = json.loads(payload_str)
+        
+        # Mallory swaps the ephemeral key for her own
+        mallory_ephemeral_pub = base64.b64encode(mallory_crypto.public_key_bytes).decode("ascii")
+        payload_data["ephemeral_key"] = mallory_ephemeral_pub
+        
+        # The signature is now invalid because it was signed over Alice's ephemeral key
+        tampered_payload_str = json.dumps(payload_data)
+        
+        # Clear inbox
+        while not bob._event_queue.empty(): bob._event_queue.get_nowait()
+        
+        # Send spoofed message to Bob
+        assert alice.transport.writer is not None
+        await write_frame(alice.transport.writer, alice._message(MessageType.KEY_EXCHANGE, "alice", "bob", TargetType.USER, tampered_payload_str))
+        
+        # Bob should reject it
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(bob._event_queue.get(), timeout=0.5)
+            
+        assert "alice" not in bob.shared_keys
+    finally:
+        alice_task.cancel()
+        bob_task.cancel()
+        await alice.disconnect()
+        await bob.disconnect()
+
