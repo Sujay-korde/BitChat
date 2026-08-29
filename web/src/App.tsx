@@ -5,14 +5,14 @@ import { useConnectionStore } from './state/connectionStore';
 import { useConversationStore } from './state/conversationStore';
 import { SecureChatClient } from './core/client/SecureChatClient';
 import { WebSocketTransport } from './core/transport/WebSocketTransport';
-import { DummyCryptoProvider } from './core/crypto/CryptoProvider';
+import { WebCryptoProvider } from './core/crypto/WebCryptoProvider';
 import { DummyModerationProvider } from './core/moderation/ModerationProvider';
 import { ConnectionState } from './core/client/events';
 import type { SecureChatEvent } from './core/client/events';
 
 // Create singleton instances for the lifetime of the app
 const transport = new WebSocketTransport();
-const crypto = new DummyCryptoProvider();
+const crypto = new WebCryptoProvider();
 const moderation = new DummyModerationProvider();
 export const client = new SecureChatClient(transport, crypto, moderation);
 

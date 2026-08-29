@@ -14,6 +14,7 @@ export class SecureChatClient {
   private username: string | null = null;
   private state: ConnectionState = ConnectionState.DISCONNECTED;
   private listeners: EventCallback[] = [];
+  private sharedKeys: Map<string, string | Uint8Array> = new Map();
   
   private heartbeatInterval: any = null;
   private shouldReconnect: boolean = true;
@@ -121,7 +122,11 @@ export class SecureChatClient {
         break;
       case MessageType.MSG:
         try {
-          const plaintext = await this.crypto.decrypt(envelope.sender, envelope.payload);
+          const keyTarget = envelope.target_type === TargetType.ROOM ? envelope.target : envelope.sender;
+          const sharedKey = this.sharedKeys.get(keyTarget);
+          if (!sharedKey) throw new Error("No shared key");
+          
+          const plaintext = await this.crypto.decrypt(sharedKey, envelope.payload);
           this.dispatch({
             type: "MessageReceived",
             sender: envelope.sender,
@@ -157,7 +162,13 @@ export class SecureChatClient {
         this.dispatch({ type: "ErrorOccurred", reason: envelope.payload });
         break;
       case MessageType.KEY_EXCHANGE:
-        this.dispatch({ type: "KeyExchangeCompleted", peer: envelope.sender });
+        try {
+          const sharedKey = await this.crypto.deriveSharedKey(envelope.payload);
+          this.sharedKeys.set(envelope.sender, sharedKey);
+          this.dispatch({ type: "KeyExchangeCompleted", peer: envelope.sender });
+        } catch (e) {
+          console.error("Key exchange failed", e);
+        }
         break;
     }
   }
@@ -206,7 +217,9 @@ export class SecureChatClient {
 
     let ciphertext: string;
     try {
-      ciphertext = await this.crypto.encrypt(room, text);
+      const sharedKey = this.sharedKeys.get(room);
+      if (!sharedKey) throw new Error("No shared key for room");
+      ciphertext = await this.crypto.encrypt(sharedKey, text);
     } catch (e) {
       this.dispatch({ type: "EncryptionUnavailable" });
       return;
@@ -232,7 +245,9 @@ export class SecureChatClient {
 
     let ciphertext: string;
     try {
-      ciphertext = await this.crypto.encrypt(peer, text);
+      const sharedKey = this.sharedKeys.get(peer);
+      if (!sharedKey) throw new Error("No shared key for peer");
+      ciphertext = await this.crypto.encrypt(sharedKey, text);
     } catch (e) {
       this.dispatch({ type: "EncryptionUnavailable" });
       return;
