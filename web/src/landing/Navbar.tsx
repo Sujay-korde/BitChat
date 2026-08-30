@@ -26,16 +26,26 @@ export function Navbar() {
       <div className="navbar-container">
         <div className="navbar-left">
           <div className="navbar-logo">
-            <div className="logo-mark"></div>
-            <span>SECURECHAT</span>
+            <span className="logo-text">SECURECHAT</span>
           </div>
         </div>
         
         <div className="navbar-center">
-          <button className="nav-link active" onClick={() => scrollToSection('hero')}>Home</button>
-          <button className="nav-link" onClick={() => scrollToSection('product')}>Product</button>
-          <button className="nav-link" onClick={() => scrollToSection('security')}>Security</button>
-          <button className="nav-link" onClick={() => scrollToSection('architecture')}>Architecture</button>
+          <button className="nav-link" onClick={() => scrollToSection('hero')}>
+            <span className="nav-num">01</span> Wearable
+          </button>
+          <button className="nav-link" onClick={() => scrollToSection('product')}>
+            <span className="nav-num">02</span> Neural
+          </button>
+          <button className="nav-link" onClick={() => scrollToSection('security')}>
+            <span className="nav-num">03</span> Programs
+          </button>
+          <button className="nav-link" onClick={() => scrollToSection('architecture')}>
+            <span className="nav-num">04</span> Updates
+          </button>
+          <button className="nav-link" onClick={() => {}}>
+            <span className="nav-num">05</span> Search
+          </button>
         </div>
         
         <div className="navbar-right">

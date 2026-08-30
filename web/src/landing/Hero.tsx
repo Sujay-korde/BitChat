@@ -35,12 +35,12 @@ export function Hero() {
       <div className={`hero-content-container ${loaded ? 'animate-in' : ''}`}>
         <div className="hero-content">
           <h1 className="hero-heading anim-2">
-            PRIVATE COMMUNICATION<br />
-            WITHOUT THE TRUSTED SERVER.
+            PRIVATE COMMUNICATION <br />
+            <span className="mono-highlight">[ ZERO-TRUST RELAY ]</span>
           </h1>
           
           <p className="hero-supporting anim-3">
-            SecureChat encrypts messages on your device before they reach the network, while the server operates only as an untrusted relay.
+            SecureChat encrypts messages on your device before they reach the network, while the server operates <span className="mono-highlight-inline">strictly as an untrusted relay</span>.
           </p>
           
           <div className="hero-actions anim-4">
