@@ -355,8 +355,8 @@ class ChatServer:
 
 
 def main() -> None:
-    asyncio.run(ChatServer().start())
-
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    asyncio.run(ChatServer().start_all())
 
 if __name__ == "__main__":
     main()
