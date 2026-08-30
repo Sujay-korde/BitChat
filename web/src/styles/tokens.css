@@ -1,26 +1,27 @@
 :root {
   /* Colors - Zinc/Slate based for a dark, technical premium feel */
-  --color-bg-base: #09090b; /* Zinc 950 */
-  --color-bg-surface: #121214; /* Darker Zinc */
-  --color-bg-surface-elevated: #18181b; /* Zinc 900 */
-  --color-bg-surface-hover: #27272a; /* Zinc 800 */
-  --color-bg-surface-active: #3f3f46; /* Zinc 700 */
+  --color-bg-base: #090909;
+  --color-bg-surface: #101010;
+  --color-bg-surface-secondary: #151515;
+  --color-bg-surface-elevated: #1B1B1B;
+  --color-bg-surface-hover: #27272a;
+  --color-bg-surface-active: #3f3f46;
   
-  --color-border: #27272a;
+  --color-border: #262626;
   --color-border-subtle: #18181b;
   --color-border-strong: #3f3f46;
   --color-border-focus: #52525b;
   
-  --color-text-primary: #fafafa;
-  --color-text-secondary: #a1a1aa;
-  --color-text-muted: #52525b;
+  --color-text-primary: #F1F1EF;
+  --color-text-secondary: #A0A0A0;
+  --color-text-muted: #666666;
   
   /* Semantic */
   --color-accent: #e4e4e7; /* Zinc 200 instead of bright blue for a calm, editorial feel */
   --color-accent-hover: #ffffff;
-  --color-secure: #10b981; /* Emerald for E2E status */
-  --color-warning: #f59e0b; /* Amber */
-  --color-danger: #ef4444; /* Red */
+  --color-secure: #55D98B;
+  --color-warning: #D7AA54;
+  --color-danger: #D96B6B;
   --color-info: #3b82f6; /* Blue for neutral info */
 
   /* Typography */

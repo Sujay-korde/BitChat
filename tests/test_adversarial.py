@@ -192,19 +192,19 @@ async def test_room_epoch_isolation(server: ChatServer):
         charlie_shared_key = charlie_crypto.verify_and_derive_shared_key("alice", "charlie", msg["payload"])
         
         # Alice distributes Epoch 2 key to Charlie
-        rk_payload = json.dumps({"room_id": "room_1", "key_version": 2, "room_key": base64.b64encode(epoch2_key).decode("ascii")})
-        enc_rk = alice_crypto.encrypt(alice_shared_key, rk_payload) # Wait, Alice needs charlie's ephemeral key first to send encrypted msg!
+        rk_payload_dict = {"room_id": "room_1", "key_version": 2, "room_key": base64.b64encode(epoch2_key).decode("ascii")}
+        enc_rk = alice_crypto.encrypt(alice_shared_key, rk_payload_dict) # Wait, Alice needs charlie's ephemeral key first to send encrypted msg!
         # Actually in test, Alice just uses TOFU. But we did not send Charlie -> Alice yet. Let's do it:
         await ws_charlie.send(json.dumps({"type": MessageType.KEY_EXCHANGE.value, "msg_id": "kx4", "sender": "charlie", "target": "alice", "target_type": TargetType.USER.value, "timestamp": 123456, "payload": charlie_crypto.get_key_exchange_payload("charlie", "alice")}))
         msg = json.loads(await ws_alice.recv())
         alice_charlie_key = alice_crypto.verify_and_derive_shared_key("charlie", "alice", msg["payload"])
         
         # Now Alice sends Epoch 2 key to Charlie
-        enc_rk = alice_crypto.encrypt(alice_charlie_key, rk_payload)
+        enc_rk = alice_crypto.encrypt(alice_charlie_key, rk_payload_dict)
         await ws_alice.send(json.dumps({"type": MessageType.ROOM_KEY.value, "msg_id": "rk1", "sender": "alice", "target": "charlie", "target_type": TargetType.USER.value, "timestamp": 123456, "payload": enc_rk}))
         rk_msg = json.loads(await ws_charlie.recv())
         dec_rk = charlie_crypto.decrypt(charlie_shared_key, rk_msg["payload"])
-        charlie_room_key = base64.b64decode(json.loads(dec_rk)["room_key"])
+        charlie_room_key = base64.b64decode(dec_rk["room_key"])
         
         # Verify Charlie cannot decrypt Epoch 1 message
         with pytest.raises(ValueError, match="Message authentication failed"):

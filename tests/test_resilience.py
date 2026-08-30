@@ -40,6 +40,10 @@ async def test_heartbeat_and_timeout(test_server):
             
         assert test_server.presence.status("alice") == "online"
         
+        # Disable client heartbeat so it doesn't reset our artificial timeout
+        if alice._heartbeat_task:
+            alice._heartbeat_task.cancel()
+        
         # We manually advance the clock for the server session or just change last_heartbeat
         session = test_server.sessions["alice"]
         session.last_heartbeat -= 16.0

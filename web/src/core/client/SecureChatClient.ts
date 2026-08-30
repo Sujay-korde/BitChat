@@ -356,6 +356,7 @@ export class SecureChatClient {
 
   async sendDirectMessage(peer: string, text: string) {
     if (this.state !== ConnectionState.READY) throw new Error("Not ready");
+    if (!this.username) throw new Error("Not authenticated");
 
     const isValid = await this.moderation.moderate(text);
     if (!isValid) {

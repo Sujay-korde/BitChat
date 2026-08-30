@@ -526,6 +526,10 @@ async def test_ws_stale_session_pruned(dual_server):
         while alice.state != ConnectionState.READY:
             await asyncio.sleep(0.01)
 
+        # Disable client heartbeat so it doesn't reset our artificial timeout
+        if alice._heartbeat_task:
+            alice._heartbeat_task.cancel()
+
         # Artificially expire the session
         dual_server.sessions["alice"].last_heartbeat -= 16.0
 

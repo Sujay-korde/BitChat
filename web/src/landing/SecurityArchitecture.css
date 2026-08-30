@@ -1,0 +1,98 @@
+.security-arch-section {
+  padding: 150px 0;
+  background-color: var(--color-bg-surface);
+  border-top: 1px solid var(--color-border);
+  overflow-x: auto;
+}
+
+.sec-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 var(--space-6);
+}
+
+.pipeline-horizontal {
+  display: flex;
+  align-items: flex-start;
+  margin-top: 80px;
+  padding-bottom: var(--space-8);
+  min-width: max-content;
+}
+
+.pipeline-stage {
+  width: 180px;
+  display: flex;
+  flex-direction: column;
+  transition: opacity 200ms var(--ease-standard),
+              transform 200ms var(--ease-standard);
+  cursor: default;
+}
+
+.pipeline-stage.dimmed {
+  opacity: 0.3;
+}
+
+.pipeline-stage.active {
+  opacity: 1;
+}
+
+.stage-header {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  transition: border-color 200ms var(--ease-standard);
+}
+
+.pipeline-stage.active .stage-header {
+  border-color: var(--color-text-primary);
+}
+
+.stage-title {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-1);
+}
+
+.stage-subtitle {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.stage-explanation {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+  opacity: 0;
+  transform: translateY(5px);
+  transition: opacity 200ms var(--ease-standard),
+              transform 200ms var(--ease-standard);
+  height: 0;
+  overflow: hidden;
+}
+
+.pipeline-stage.active .stage-explanation {
+  opacity: 1;
+  transform: translateY(0);
+  height: auto;
+}
+
+.pipeline-connector {
+  color: var(--color-border-strong);
+  padding: 0 var(--space-3);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  transition: color 200ms var(--ease-standard);
+  margin-top: 5px; /* align with titles */
+}
+
+.pipeline-connector.active {
+  color: var(--color-text-primary);
+}
