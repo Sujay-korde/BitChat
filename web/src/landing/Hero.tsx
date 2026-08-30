@@ -30,6 +30,7 @@ export function Hero() {
         loop 
         playsInline
       ></video>
+      <div className="hero-gradient-overlay"></div>
       
       <div className={`hero-content-container ${loaded ? 'animate-in' : ''}`}>
         <div className="hero-content">

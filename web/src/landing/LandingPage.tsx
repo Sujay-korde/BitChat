@@ -1,13 +1,11 @@
 import { useEffect } from 'react';
 import { Navbar } from './Navbar';
 import { Hero } from './Hero';
-import { EncryptionStory } from './EncryptionStory';
-import { ProductShowcase } from './ProductShowcase';
-import { SecurityArchitecture } from './SecurityArchitecture';
-import { TransportArchitecture } from './TransportArchitecture';
-import { RoomArchitecture } from './RoomArchitecture';
-import { Resilience } from './Resilience';
-import { SecuritySummary } from './SecuritySummary';
+import { StorySection } from './StorySection';
+import { StatsSection } from './StatsSection';
+import { SolutionsCards } from './SolutionsCards';
+import { FeaturesWheel } from './FeaturesWheel';
+import { FAQSection } from './FAQSection';
 import { FinalCTA } from './FinalCTA';
 import { Footer } from './Footer';
 
@@ -20,13 +18,11 @@ export function LandingPage() {
     <div style={{ background: 'var(--color-bg-base)', color: 'var(--color-text-primary)' }}>
       <Navbar />
       <Hero />
-      <EncryptionStory />
-      <ProductShowcase />
-      <SecurityArchitecture />
-      <TransportArchitecture />
-      <RoomArchitecture />
-      <Resilience />
-      <SecuritySummary />
+      <StorySection />
+      <StatsSection />
+      <SolutionsCards />
+      <FeaturesWheel />
+      <FAQSection />
       <FinalCTA />
       <Footer />
     </div>
