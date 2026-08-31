@@ -14,7 +14,7 @@ export function ArchitecturePage() {
   useEffect(() => {
     window.scrollTo(0, 0);
 
-    let timeouts: NodeJS.Timeout[] = [];
+    let timeouts: ReturnType<typeof setTimeout>[] = [];
 
     const msg = '"Hey Pritam, are you free?"';
     const cipher = '░ 7F3A 91C2 ░';

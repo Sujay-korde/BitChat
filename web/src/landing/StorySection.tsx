@@ -10,7 +10,7 @@ export function StorySection() {
   const [stage, setStage] = useState(0);
 
   useEffect(() => {
-    let timeouts: NodeJS.Timeout[] = [];
+    let timeouts: ReturnType<typeof setTimeout>[] = [];
 
     const runCycle = () => {
       setStage(0);
