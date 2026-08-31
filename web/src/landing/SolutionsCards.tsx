@@ -36,18 +36,18 @@ export function SolutionsCards() {
         <h2 className="solutions-title">Protocol Primitives</h2>
         <p className="solutions-subtitle">The cryptographic foundation of SecureChat</p>
       </div>
-      
+
       <div className="solutions-grid-wrapper">
         <div className="solutions-grid">
           {features.map((feature, i) => (
-            <motion.div 
-              key={i} 
+            <motion.div
+              key={i}
               className="solution-card"
               whileHover={{ scale: 1.02 }}
               transition={{ type: "spring", stiffness: 300, damping: 20 }}
             >
-              <div 
-                className="solution-glow" 
+              <div
+                className="solution-glow"
                 style={{ background: `radial-gradient(circle at 50% 0%, ${feature.color}, transparent 70%)` }}
               ></div>
               <div className="solution-content">

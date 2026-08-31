@@ -1,77 +1,136 @@
 import { motion } from 'framer-motion';
-import { ArrowRight, Lock, Shield, Server } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import './StorySection.css';
 import { useState, useEffect } from 'react';
 
 export function StorySection() {
-  const [step, setStep] = useState(0);
+  // stage: 0: initial, 1: rahul encrypted, 2: relay active, 3: relay cleared, 4: pritam authenticating, 5: pritam decrypted
+  const [stage, setStage] = useState(0);
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setStep((s) => (s + 1) % 4);
-    }, 2500);
-    return () => clearInterval(timer);
+    let timeouts: NodeJS.Timeout[] = [];
+
+    const runCycle = () => {
+      setStage(0);
+
+      timeouts.push(setTimeout(() => setStage(1), 750));
+      timeouts.push(setTimeout(() => setStage(2), 2200));
+      timeouts.push(setTimeout(() => setStage(3), 2900));
+      timeouts.push(setTimeout(() => setStage(4), 4100));
+      timeouts.push(setTimeout(() => setStage(5), 4400));
+    };
+
+    runCycle();
+    const interval = setInterval(runCycle, 5000);
+
+    return () => {
+      clearInterval(interval);
+      timeouts.forEach(clearTimeout);
+    };
   }, []);
+
+  const msg = 'Hey Pritam, are you free?';
+  const cipher = '7F0A 89C1 E43D';
 
   return (
     <section className="story-section" id="architecture">
       <div className="story-container">
-        {/* Left Column: Interactive Mock Dashboard */}
+        {/* Left Column: Security Protocol Bento Animation */}
         <div className="story-mockup">
-          <div className="mockup-header">
-            <div className="window-controls">
-              <span className="dot red"></span>
-              <span className="dot yellow"></span>
-              <span className="dot green"></span>
-            </div>
-            <div className="window-title">SecureChat Protocol</div>
-          </div>
-          
-          <div className="mockup-body">
-            <div className="flow-visualizer">
-              <div className={`node client ${step === 0 ? 'active' : ''}`}>
-                <Shield size={24} />
-                <span>Alice</span>
-              </div>
-              
-              <div className="flow-path">
-                <motion.div 
-                  className="packet"
-                  initial={{ left: "0%" }}
-                  animate={{ left: step >= 1 ? "100%" : "0%" }}
-                  transition={{ duration: 0.8 }}
-                >
-                  <Lock size={14} color="#000" />
-                </motion.div>
+          <div className="proto-bento">
+            <div className="proto-stage">
+              <div className="proto-wire"></div>
+
+              {/* Moving Ciphertext Packet */}
+              <div className="proto-packet">
+                <div className="proto-packet-box">░ 7F0A 89C1 ░</div>
               </div>
 
-              <div className={`node server ${step === 1 || step === 2 ? 'active' : ''}`}>
-                <Server size={24} />
-                <span>Relay</span>
-              </div>
+              <div className="proto-grid-nodes">
+                {/* Node 1: Rahul (Sender) */}
+                <div className="proto-node active">
+                  <div>
+                    <div className="proto-node-top">
+                      <span className="proto-node-label">Rahul</span>
+                      <div className="proto-node-meta-list">
+                        <span>• Origin Node</span>
+                        <span>• Key: #48E1-X255</span>
+                      </div>
+                    </div>
+                    <div className="proto-bubble">
+                      {stage < 1 ? (
+                        <span>{msg}</span>
+                      ) : (
+                        <span className="proto-mono-text proto-encrypted-hash">{cipher}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="proto-node-foot">
+                    <span>{stage < 1 ? 'PLAINTEXT' : 'CIPHERTEXT'}</span>
+                    <span className="proto-state-badge verified">
+                      {stage < 1 ? '✓ LOCAL' : '✓ ENCRYPTED'}
+                    </span>
+                  </div>
+                </div>
 
-              <div className="flow-path">
-                <motion.div 
-                  className="packet"
-                  initial={{ left: "0%" }}
-                  animate={{ left: step >= 3 ? "100%" : "0%" }}
-                  transition={{ duration: 0.8 }}
-                >
-                  <Lock size={14} color="#000" />
-                </motion.div>
-              </div>
+                {/* Node 2: Relay (Untrusted Transit) */}
+                <div className="proto-node" style={{ borderStyle: 'dashed' }}>
+                  <div>
+                    <div className="proto-node-top">
+                      <span className="proto-node-label" style={{ color: '#707684' }}>Relay</span>
+                      <div className="proto-node-meta-list">
+                        <span>• Blind Router</span>
+                        <span>• Zero-Knowledge</span>
+                      </div>
+                    </div>
+                    <div className="proto-bubble relay">
+                      {stage === 2 ? (
+                        <span className="proto-mono-text proto-encrypted-hash">░ {cipher} ░</span>
+                      ) : (
+                        <span className="proto-mono-text proto-ciphertext">░░░░░░░░░░░░</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="proto-node-foot">
+                    <span>CIPHERTEXT ONLY</span>
+                    <span className="proto-state-badge">NO KEY</span>
+                  </div>
+                </div>
 
-              <div className={`node client ${step === 3 ? 'active' : ''}`}>
-                <Shield size={24} />
-                <span>Bob</span>
+                {/* Node 3: Pritam (Receiver) */}
+                <div className="proto-node active">
+                  <div>
+                    <div className="proto-node-top">
+                      <span className="proto-node-label">Pritam</span>
+                      <div className="proto-node-meta-list">
+                        <span>• Target Node</span>
+                        <span>• Key: #90B4-X255</span>
+                      </div>
+                    </div>
+                    <div className="proto-bubble">
+                      {stage < 4 && (
+                        <span className="proto-mono-text proto-ciphertext">░░░░░░░░░░░░</span>
+                      )}
+                      {stage === 4 && (
+                        <span className="proto-mono-text proto-encrypted-hash">{cipher}</span>
+                      )}
+                      {stage >= 5 && (
+                        <span>{msg}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="proto-node-foot">
+                    <span>
+                      {stage < 4 ? 'STANDBY' : stage === 4 ? 'AUTHENTICATING' : 'PLAINTEXT'}
+                    </span>
+                    <span
+                      className={`proto-state-badge ${stage >= 4 ? 'verified' : ''}`}
+                    >
+                      {stage < 4 ? 'IDLE' : stage === 4 ? 'TAG MATCH' : '✓ DECRYPTED'}
+                    </span>
+                  </div>
+                </div>
               </div>
-            </div>
-
-            <div className="terminal-logs">
-              {step >= 0 && <div>[00:00:01] Alice: Encrypting message with Bob's public key...</div>}
-              {step >= 1 && <div>[00:00:02] Relay: Received encrypted payload. Cannot decrypt.</div>}
-              {step >= 2 && <div>[00:00:03] Relay: Forwarding ciphertext to Bob...</div>}
-              {step >= 3 && <div>[00:00:04] Bob: Decrypting message successfully.</div>}
             </div>
           </div>
         </div>
@@ -104,3 +163,4 @@ export function StorySection() {
     </section>
   );
 }
+

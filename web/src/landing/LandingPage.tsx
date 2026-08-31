@@ -2,7 +2,6 @@ import { useEffect } from 'react';
 import { Navbar } from './Navbar';
 import { Hero } from './Hero';
 import { StorySection } from './StorySection';
-import { StatsSection } from './StatsSection';
 import { SolutionsCards } from './SolutionsCards';
 import { FeaturesWheel } from './FeaturesWheel';
 import { FAQSection } from './FAQSection';
@@ -19,7 +18,6 @@ export function LandingPage() {
       <Navbar />
       <Hero />
       <StorySection />
-      <StatsSection />
       <SolutionsCards />
       <FeaturesWheel />
       <FAQSection />
