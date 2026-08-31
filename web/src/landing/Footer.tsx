@@ -21,11 +21,9 @@ export function Footer() {
           <div className="footer-col brand-col">
             <div className="footer-brand">
               <div className="footer-brand-header">
-                <img 
-                  src="/securechat_footer_brand.png" 
-                  alt="SecureChat Protocol" 
-                  className="footer-brand-img" 
-                />
+                <div className="footer-brand-placeholder">
+                  <Shield size={18} />
+                </div>
                 <span className="footer-brand-name">SECURECHAT</span>
               </div>
               <p className="footer-brand-desc">
