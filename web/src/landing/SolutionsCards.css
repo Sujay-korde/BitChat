@@ -1,5 +1,5 @@
 .solutions-section {
-  background-color: var(--color-bg-base);
+  background-color: transparent;
   padding: var(--space-16) 0;
   /* padding 0 horizontally to allow scroll overflow */
   width: 100%;

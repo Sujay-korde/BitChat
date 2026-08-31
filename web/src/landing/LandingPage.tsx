@@ -18,11 +18,16 @@ export function LandingPage() {
       <Navbar />
       <Hero />
       <StorySection />
-      <FeaturesSection />
-      <SolutionsCards />
-      <FAQSection />
-      <FinalCTA />
-      <Footer />
+
+      {/* Neon Vertical Grid Background spanning from Features Section to Footer */}
+      <div className="neon-grid-wrapper">
+        <div className="neon-vertical-grid-overlay" />
+        <FeaturesSection />
+        <SolutionsCards />
+        <FAQSection />
+        <FinalCTA />
+        <Footer />
+      </div>
     </div>
   );
 }
