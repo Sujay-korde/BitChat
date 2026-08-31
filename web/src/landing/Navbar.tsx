@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import './Navbar.css';
 
 export function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -15,9 +16,27 @@ export function Navbar() {
   }, []);
 
   const scrollToSection = (id: string) => {
-    const el = document.getElementById(id);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth' });
+    if (location.pathname !== '/') {
+      navigate('/');
+      setTimeout(() => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth' });
+        }
+      }, 100);
+    } else {
+      const el = document.getElementById(id);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+  };
+
+  const handleLogoClick = () => {
+    if (location.pathname !== '/') {
+      navigate('/');
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
@@ -25,7 +44,7 @@ export function Navbar() {
     <nav className={`navbar ${scrolled ? 'scrolled' : ''}`}>
       <div className="navbar-container">
         <div className="navbar-left">
-          <div className="navbar-logo">
+          <div className="navbar-logo" onClick={handleLogoClick} style={{ cursor: 'pointer' }}>
             <span className="logo-text">SECURECHAT</span>
           </div>
         </div>
@@ -41,10 +60,10 @@ export function Navbar() {
             <span className="nav-num">03</span> Programs
           </button>
           <button className="nav-link" onClick={() => scrollToSection('architecture')}>
-            <span className="nav-num">04</span> Updates
+            <span className="nav-num">04</span> Architecture
           </button>
-          <button className="nav-link" onClick={() => {}}>
-            <span className="nav-num">05</span> Search
+          <button className="nav-link" onClick={() => navigate('/architecture')}>
+            <span className="nav-num">05</span> Flowchart
           </button>
         </div>
         
@@ -57,3 +76,4 @@ export function Navbar() {
     </nav>
   );
 }
+

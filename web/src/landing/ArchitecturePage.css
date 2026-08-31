@@ -1,0 +1,371 @@
+:root {
+  --arch-bg: #050608;
+  --arch-card-bg: #0b0d11;
+  --arch-surface-1: #11141a;
+  --arch-surface-2: #161a22;
+  --arch-surface-subtle: #1c212c;
+
+  --arch-border-subtle: rgba(255, 255, 255, 0.07);
+  --arch-border-medium: rgba(255, 255, 255, 0.14);
+  --arch-border-trusted: rgba(16, 185, 129, 0.28);
+  --arch-border-untrusted: rgba(255, 255, 255, 0.1);
+
+  --arch-text-main: #f3f4f6;
+  --arch-text-muted: #707684;
+
+  --arch-emerald: #10b981;
+  --arch-emerald-glow: rgba(16, 185, 129, 0.2);
+
+  --arch-font-sans: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
+  --arch-font-mono: 'Geist Mono', monospace;
+}
+
+.arch-page {
+  background-color: var(--arch-bg);
+  color: var(--arch-text-main);
+  font-family: var(--arch-font-sans);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.arch-container {
+  flex: 1;
+  max-width: 1320px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 120px 1.5rem 80px 1.5rem;
+}
+
+/* Header Section */
+.arch-header {
+  text-align: center;
+  margin-bottom: 3.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.arch-badge {
+  display: inline-block;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: var(--arch-emerald);
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-family: var(--arch-font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 1rem;
+}
+
+.arch-title {
+  font-size: clamp(2rem, 4vw, 3.25rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--arch-text-main);
+  margin-bottom: 1rem;
+}
+
+.arch-subtitle {
+  font-size: 1.125rem;
+  color: var(--arch-text-muted);
+  max-width: 760px;
+  line-height: 1.6;
+}
+
+/* Blueprint Flowchart Container */
+.arch-blueprint {
+  width: 100%;
+  background: var(--arch-card-bg);
+  border: 1px solid var(--arch-border-subtle);
+  border-radius: 14px;
+  padding: 2.5rem;
+  position: relative;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5);
+  margin-bottom: 4rem;
+}
+
+/* Flowchart Columns Grid */
+.arch-flowchart-grid {
+  display: grid;
+  grid-template-columns: 1fr 0.82fr 1fr;
+  gap: 2rem;
+  position: relative;
+}
+
+/* Boundary Zones */
+.arch-zone {
+  background: var(--arch-surface-1);
+  border-radius: 10px;
+  border: 1px solid var(--arch-border-subtle);
+  padding: 1.5rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  position: relative;
+}
+
+.arch-zone.trusted {
+  border-color: var(--arch-border-trusted);
+}
+
+.arch-zone.untrusted {
+  background: #080a0e;
+  border-style: dashed;
+  border-color: var(--arch-border-untrusted);
+}
+
+.arch-zone-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--arch-font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--arch-border-subtle);
+}
+
+.arch-zone-banner.trusted-text { color: var(--arch-emerald); font-weight: 500; }
+.arch-zone-banner.untrusted-text { color: var(--arch-text-muted); font-weight: 500; }
+
+/* Flowchart Node Box */
+.arch-node-box {
+  background: var(--arch-surface-2);
+  border: 1px solid var(--arch-border-subtle);
+  border-radius: 6px;
+  padding: 0.85rem 1rem;
+  position: relative;
+  transition: border-color 200ms ease, box-shadow 200ms ease, background 200ms ease;
+}
+
+.arch-node-box.active-pulse {
+  border-color: var(--arch-emerald);
+  box-shadow: 0 0 16px var(--arch-emerald-glow);
+  background: #0f1616;
+}
+
+.arch-node-box.active-relay {
+  border-color: rgba(255, 255, 255, 0.4);
+  background: #14171d;
+}
+
+.arch-node-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.arch-node-title {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--arch-text-main);
+  letter-spacing: -0.01em;
+}
+
+.arch-node-spec {
+  font-family: var(--arch-font-mono);
+  font-size: 0.625rem;
+  color: var(--arch-text-muted);
+}
+
+.arch-node-spec.emerald { color: var(--arch-emerald); }
+
+/* Vertical Flow Connectors with Light Beams */
+.arch-v-arrow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  position: relative;
+}
+
+.arch-v-arrow::before {
+  content: "";
+  width: 1px;
+  height: 100%;
+  background: var(--arch-border-medium);
+}
+
+.arch-v-arrow .arch-beam {
+  position: absolute;
+  width: 2px;
+  height: 8px;
+  background: var(--arch-emerald);
+  box-shadow: 0 0 6px var(--arch-emerald);
+  opacity: 0;
+  top: 0;
+}
+
+.arch-v-arrow.active-beam .arch-beam {
+  animation: archVerticalDrop 0.6s ease-in-out forwards;
+}
+
+@keyframes archVerticalDrop {
+  0% { top: 0; opacity: 1; }
+  100% { top: calc(100% - 8px); opacity: 0; }
+}
+
+/* Full-Width Transit Pipeline Stage */
+.arch-transit-stage {
+  grid-column: 1 / -1;
+  background: #08090d;
+  border: 1px solid var(--arch-border-subtle);
+  border-radius: 8px;
+  padding: 1.25rem 1.5rem;
+  margin-top: 1.5rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.arch-transit-track {
+  position: absolute;
+  top: 50%;
+  left: 10%;
+  right: 10%;
+  height: 1px;
+  background: linear-gradient(90deg, 
+    rgba(16, 185, 129, 0.1) 0%, 
+    rgba(255, 255, 255, 0.1) 50%, 
+    rgba(16, 185, 129, 0.1) 100%
+  );
+  transform: translateY(-50%);
+  z-index: 1;
+}
+
+.arch-flying-packet {
+  position: absolute;
+  top: 50%;
+  left: 14%;
+  transform: translateY(-50%);
+  z-index: 10;
+  opacity: 0;
+  pointer-events: none;
+  animation: archPacketRun 5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.arch-packet-chip {
+  background: var(--arch-surface-2);
+  border: 1px solid var(--arch-border-medium);
+  padding: 0.25rem 0.65rem;
+  border-radius: 4px;
+  font-family: var(--arch-font-mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.08em;
+  color: #cbd5e1;
+  white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.6);
+}
+
+.arch-transit-grid {
+  display: grid;
+  grid-template-columns: 1fr 0.82fr 1fr;
+  gap: 2rem;
+  position: relative;
+  z-index: 2;
+}
+
+.arch-transit-node-display {
+  background: var(--arch-surface-1);
+  border: 1px solid var(--arch-border-subtle);
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  font-family: var(--arch-font-mono);
+  font-size: 0.6875rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.arch-transit-node-display.relay-display {
+  border-style: dashed;
+  background: transparent;
+  text-align: center;
+}
+
+.arch-display-tag {
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  color: var(--arch-text-muted);
+  letter-spacing: 0.05em;
+}
+
+.arch-display-val { color: var(--arch-text-main); }
+.arch-display-val.cipher { color: var(--arch-text-muted); letter-spacing: 0.08em; }
+
+@keyframes archPacketRun {
+  0% { opacity: 0; transform: translate(0, -50%); }
+  12% { opacity: 1; transform: translate(0, -50%); }
+  45% { opacity: 1; transform: translate(320px, -50%); }
+  55% { opacity: 1; transform: translate(370px, -50%); }
+  85% { opacity: 1; transform: translate(750px, -50%); }
+  92%, 100% { opacity: 0; transform: translate(750px, -50%); }
+}
+
+@media (max-width: 980px) {
+  .arch-flowchart-grid, .arch-transit-grid { grid-template-columns: 1fr; }
+  .arch-transit-track, .arch-flying-packet { display: none; }
+}
+
+/* Extra Information Section Below Flowchart */
+.arch-info-section {
+  margin-top: 4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+}
+
+.arch-info-header {
+  border-bottom: 1px solid var(--arch-border-subtle);
+  padding-bottom: 1rem;
+}
+
+.arch-info-header h3 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--arch-text-main);
+}
+
+.arch-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+}
+
+.arch-info-card {
+  background: var(--arch-card-bg);
+  border: 1px solid var(--arch-border-subtle);
+  border-radius: 10px;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  transition: border-color 0.2s ease;
+}
+
+.arch-info-card:hover {
+  border-color: var(--arch-border-medium);
+}
+
+.arch-info-card-num {
+  font-family: var(--arch-font-mono);
+  font-size: 0.75rem;
+  color: var(--arch-emerald);
+  font-weight: 600;
+}
+
+.arch-info-card-title {
+  font-size: 1.125rem;
+  font-weight: 500;
+  color: var(--arch-text-main);
+}
+
+.arch-info-card-desc {
+  font-size: 0.875rem;
+  color: var(--arch-text-muted);
+  line-height: 1.6;
+}

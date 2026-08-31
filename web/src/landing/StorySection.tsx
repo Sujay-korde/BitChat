@@ -1,9 +1,11 @@
 import { motion } from 'framer-motion';
 import { ArrowRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import './StorySection.css';
 import { useState, useEffect } from 'react';
 
 export function StorySection() {
+  const navigate = useNavigate();
   // stage: 0: initial, 1: rahul encrypted, 2: relay active, 3: relay cleared, 4: pritam authenticating, 5: pritam decrypted
   const [stage, setStage] = useState(0);
 
@@ -146,8 +148,9 @@ export function StorySection() {
             className="story-cta"
             whileHover="hover"
             initial="rest"
+            onClick={() => navigate('/architecture')}
           >
-            <span>Read the Whitepaper</span>
+            <span>Complete Flow</span>
             <motion.div 
               className="cta-arrow"
               variants={{
