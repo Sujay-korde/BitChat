@@ -4,7 +4,6 @@ import { Hero } from './Hero';
 import { StorySection } from './StorySection';
 import { FeaturesSection } from './FeaturesSection';
 import { SolutionsCards } from './SolutionsCards';
-import { FeaturesWheel } from './FeaturesWheel';
 import { FAQSection } from './FAQSection';
 import { FinalCTA } from './FinalCTA';
 import { Footer } from './Footer';
@@ -21,7 +20,6 @@ export function LandingPage() {
       <StorySection />
       <FeaturesSection />
       <SolutionsCards />
-      <FeaturesWheel />
       <FAQSection />
       <FinalCTA />
       <Footer />
