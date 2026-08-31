@@ -51,19 +51,19 @@ export function Navbar() {
         
         <div className="navbar-center">
           <button className="nav-link" onClick={() => scrollToSection('hero')}>
-            <span className="nav-num">01</span> Wearable
-          </button>
-          <button className="nav-link" onClick={() => scrollToSection('product')}>
-            <span className="nav-num">02</span> Neural
-          </button>
-          <button className="nav-link" onClick={() => scrollToSection('security')}>
-            <span className="nav-num">03</span> Programs
+            <span className="nav-num">01</span> Overview
           </button>
           <button className="nav-link" onClick={() => scrollToSection('architecture')}>
-            <span className="nav-num">04</span> Architecture
+            <span className="nav-num">02</span> Architecture
+          </button>
+          <button className="nav-link" onClick={() => scrollToSection('features')}>
+            <span className="nav-num">03</span> Features
           </button>
           <button className="nav-link" onClick={() => navigate('/architecture')}>
-            <span className="nav-num">05</span> Flowchart
+            <span className="nav-num">04</span> Flowchart
+          </button>
+          <button className="nav-link" onClick={() => scrollToSection('security')}>
+            <span className="nav-num">05</span> Security
           </button>
         </div>
         

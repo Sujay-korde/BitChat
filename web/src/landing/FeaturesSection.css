@@ -1,0 +1,157 @@
+.features-section {
+  background-color: var(--color-bg-base, #050608);
+  padding: 6rem 1.5rem;
+  width: 100%;
+  position: relative;
+}
+
+.features-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3.5rem;
+}
+
+/* Header */
+.features-header-wrapper {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.features-badge {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  color: #10b981;
+  padding: 4px 14px;
+  border-radius: 20px;
+  font-family: var(--font-mono, 'Geist Mono', monospace);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.features-main-title {
+  font-family: var(--font-sans, 'Geist', sans-serif);
+  font-size: clamp(2rem, 3.5vw, 3rem);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--color-text-primary, #ededed);
+  line-height: 1.15;
+  margin: 0;
+}
+
+.features-main-subtitle {
+  font-family: var(--font-sans, 'Geist', sans-serif);
+  font-size: var(--text-lg, 1.125rem);
+  color: var(--color-text-secondary, #707684);
+  max-width: 680px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* Grid Layout - Inspired by Tailark Features-8 */
+.features-8-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+}
+
+@media (max-width: 980px) {
+  .features-8-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .features-8-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Tailark Feature Card Styling */
+.f8-card {
+  background: #0c0e12;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 1.75rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.f8-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.4);
+}
+
+.f8-card-top {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.f8-icon-box {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: #12151c;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #10b981;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.f8-card-title {
+  font-family: var(--font-sans, 'Geist', sans-serif);
+  font-size: 1.125rem;
+  font-weight: 500;
+  color: #ededed;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.f8-card-desc {
+  font-family: var(--font-sans, 'Geist', sans-serif);
+  font-size: 0.875rem;
+  color: #707684;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* Card Visual Snippet / Tag Footers */
+.f8-card-foot {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px dashed rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--font-mono, 'Geist Mono', monospace);
+  font-size: 0.6875rem;
+  color: #707684;
+}
+
+.f8-tag {
+  background: #141822;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 3px 8px;
+  border-radius: 4px;
+  color: #cbd5e1;
+}
+
+.f8-tag.emerald {
+  color: #10b981;
+  border-color: rgba(16, 185, 129, 0.3);
+  background: rgba(16, 185, 129, 0.08);
+}

@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Navbar } from './Navbar';
 import { Hero } from './Hero';
 import { StorySection } from './StorySection';
+import { FeaturesSection } from './FeaturesSection';
 import { SolutionsCards } from './SolutionsCards';
 import { FeaturesWheel } from './FeaturesWheel';
 import { FAQSection } from './FAQSection';
@@ -18,6 +19,7 @@ export function LandingPage() {
       <Navbar />
       <Hero />
       <StorySection />
+      <FeaturesSection />
       <SolutionsCards />
       <FeaturesWheel />
       <FAQSection />
@@ -26,3 +28,4 @@ export function LandingPage() {
     </div>
   );
 }
+

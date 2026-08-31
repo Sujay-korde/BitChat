@@ -31,7 +31,7 @@ const features = [
 
 export function SolutionsCards() {
   return (
-    <section className="solutions-section">
+    <section className="solutions-section" id="security">
       <div className="solutions-header">
         <h2 className="solutions-title">Protocol Primitives</h2>
         <p className="solutions-subtitle">The cryptographic foundation of SecureChat</p>
