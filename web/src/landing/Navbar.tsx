@@ -51,7 +51,7 @@ export function Navbar() {
         
         <div className="navbar-center">
           <button className="nav-link" onClick={() => scrollToSection('hero')}>
-            <span className="nav-num">01</span> Overview
+            <span className="nav-num">01</span> Home
           </button>
           <button className="nav-link" onClick={() => scrollToSection('architecture')}>
             <span className="nav-num">02</span> Architecture
@@ -69,7 +69,7 @@ export function Navbar() {
         
         <div className="navbar-right">
           <button className="primary-cta-dark" onClick={() => navigate('/app')}>
-            OPEN SECURECHAT
+            LANDING PAGE
           </button>
         </div>
       </div>
