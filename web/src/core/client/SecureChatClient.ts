@@ -58,6 +58,7 @@ export class SecureChatClient {
     }
     this.username = username;
     this.shouldReconnect = true;
+    this.setState(ConnectionState.CONNECTING);
     this._connectLoop();
   }
 
@@ -71,7 +72,6 @@ export class SecureChatClient {
   private async _connectLoop() {
     while (this.shouldReconnect) {
       try {
-        this.setState(this.state === ConnectionState.DISCONNECTED ? ConnectionState.CONNECTING : ConnectionState.RECONNECTING);
         await this.transport.connect();
         this.setState(ConnectionState.CONNECTED);
         
@@ -107,7 +107,7 @@ export class SecureChatClient {
     } catch (e) {
       if (this.shouldReconnect) {
         this.dispatch({ type: "ErrorOccurred", reason: "Connection lost" });
-        this.setState(ConnectionState.DISCONNECTED);
+        this.setState(ConnectionState.RECONNECTING);
         this._stopHeartbeat();
         // Trigger reconnect
         setTimeout(() => this._connectLoop(), 1000);
@@ -178,7 +178,8 @@ export class SecureChatClient {
               type: "MessageReceived",
               sender: envelope.sender,
               target: envelope.target,
-              text: plaintext
+              text: plaintext,
+              msg_id: envelope.msg_id
             });
           } else {
             const sharedKey = this.sharedKeys.get(envelope.sender);
@@ -204,7 +205,8 @@ export class SecureChatClient {
               type: "MessageReceived",
               sender: envelope.sender,
               target: envelope.target,
-              text: plaintext
+              text: plaintext,
+              msg_id: envelope.msg_id
             });
           }
         } catch (e) {
@@ -348,6 +350,14 @@ export class SecureChatClient {
     const msgId = await this._sendRaw(MessageType.MSG, room, TargetType.ROOM, payloadJson);
     
     this.dispatch({
+      type: "MessageReceived",
+      sender: this.username,
+      target: room,
+      text: text,
+      msg_id: msgId
+    });
+
+    this.dispatch({
       type: "MessageStatusChanged",
       msg_id: msgId,
       state: MessageState.PENDING
@@ -388,6 +398,14 @@ export class SecureChatClient {
 
     const msgId = await this._sendRaw(MessageType.MSG, peer, TargetType.USER, payloadJson);
     
+    this.dispatch({
+      type: "MessageReceived",
+      sender: this.username,
+      target: peer,
+      text: text,
+      msg_id: msgId
+    });
+
     this.dispatch({
       type: "MessageStatusChanged",
       msg_id: msgId,

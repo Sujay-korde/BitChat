@@ -32,7 +32,7 @@ function App() {
           // Otherwise (e.g. room), target remains the target.
           const conversationTarget = event.target === currentUsername ? event.sender : event.target;
           addMessage(conversationTarget, {
-            id: Date.now().toString(),
+            id: event.msg_id || Date.now().toString(),
             sender: event.sender,
             text: event.text,
             timestamp: Date.now(),

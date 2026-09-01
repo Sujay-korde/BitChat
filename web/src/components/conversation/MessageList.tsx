@@ -7,8 +7,10 @@ interface MessageListProps {
   activePeer: string;
 }
 
+const EMPTY_MESSAGES: any[] = [];
+
 export function MessageList({ activePeer }: MessageListProps) {
-  const messages = useConversationStore(state => state.messages[activePeer] || []);
+  const messages = useConversationStore(state => state.messages[activePeer] || EMPTY_MESSAGES);
   const currentUser = useConnectionStore(state => state.username);
   const bottomRef = useRef<HTMLDivElement>(null);
 

@@ -29,6 +29,7 @@ export interface MessageReceived extends AppEvent {
   sender: string;
   target: string;
   text: string;
+  msg_id?: string;
 }
 
 export interface MessageStatusChanged extends AppEvent {
