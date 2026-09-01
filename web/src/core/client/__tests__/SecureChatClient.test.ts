@@ -69,7 +69,7 @@ describe('SecureChatClient', () => {
     
     let rejectRecv: any;
     mockTransport.recvFrame.mockImplementation(() => {
-      return new Promise((resolve, reject) => {
+      return new Promise((_resolve, reject) => {
         rejectRecv = reject;
       });
     });
