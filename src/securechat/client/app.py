@@ -28,6 +28,7 @@ class SecureChatApp(Generic[TTransport]):
     moderation: ModerationClassifier = field(default_factory=ModerationClassifier)
     
     shared_keys: dict[str, bytes] = field(default_factory=dict)
+    room_keys: dict[str, tuple[bytes, int]] = field(default_factory=dict)
     
     state: ConnectionState = ConnectionState.DISCONNECTED
     pending_messages: dict[str, MessageState] = field(default_factory=dict)
@@ -60,7 +61,8 @@ class SecureChatApp(Generic[TTransport]):
             self._set_state(ConnectionState.CONNECTED)
             
             self._set_state(ConnectionState.AUTHENTICATING)
-            await self.transport.send_frame(self._message(MessageType.AUTH, self.username, self.username, TargetType.USER, self.username))
+            auth_payload = self.crypto.sign_auth_payload(self.username, int(time.time()))
+            await self.transport.send_frame(self._message(MessageType.AUTH, self.username, self.username, TargetType.USER, json.dumps(auth_payload)))
         except TransportError as e:
             self._set_state(ConnectionState.DISCONNECTED)
             self._emit(ErrorOccurred(str(e)))
@@ -76,6 +78,29 @@ class SecureChatApp(Generic[TTransport]):
         if self.state == ConnectionState.READY:
             await self.transport.send_frame(self._message(MessageType.LEAVE, self.username, room, TargetType.ROOM, ""))
 
+    async def distribute_room_key(self, room: str, members: list[str]) -> None:
+        raw_key = os.urandom(32)
+        current_version = self.room_keys.get(room, (b"", 0))[1]
+        new_version = current_version + 1
+        self.room_keys[room] = (raw_key, new_version)
+        self.shared_keys[room] = raw_key
+
+        payload = {
+            "room_id": room,
+            "key_version": new_version,
+            "room_key": base64.b64encode(raw_key).decode("ascii")
+        }
+
+        for member in members:
+            if member == self.username:
+                continue
+            shared_key = self.shared_keys.get(member)
+            if shared_key:
+                encrypted_payload = self.crypto.encrypt(shared_key, payload)
+                await self.transport.send_frame(
+                    self._message(MessageType.ROOM_KEY, self.username, member, TargetType.USER, encrypted_payload)
+                )
+
     async def send_room_message(self, room: str, text: str) -> None:
         moderation_result = self.moderation.moderate(text)
         if not moderation_result.allowed:
@@ -85,14 +110,27 @@ class SecureChatApp(Generic[TTransport]):
         if self.state != ConnectionState.READY:
             raise RuntimeError("Client is not ready")
 
-        shared_key = self.shared_keys.get(room)
-        if shared_key is None:
-            raise RuntimeError(f"No shared key established for room '{room}'")
+        if room not in self.room_keys and room in self.shared_keys:
+            self.room_keys[room] = (self.shared_keys[room], 1)
+        elif room not in self.room_keys:
+            raw_key = os.urandom(32)
+            self.room_keys[room] = (raw_key, 1)
+            self.shared_keys[room] = raw_key
 
-        payload: dict[str, object] = {"text": text}
-        encrypted_payload = self.crypto.encrypt(shared_key, payload)
-        
-        msg = self._message(MessageType.MSG, self.username, room, TargetType.ROOM, encrypted_payload)
+        room_key, key_version = self.room_keys[room]
+        seq = self.my_room_sequences.get(room, 0) + 1
+        self.my_room_sequences[room] = seq
+
+        aad = ChatCrypto.build_aad(1, MessageType.MSG.value, TargetType.ROOM.value, room, key_version, self.username, seq)
+        encrypted_payload = self.crypto.encrypt(room_key, {"text": text}, aad=aad)
+
+        msg_payload = {
+            "key_version": key_version,
+            "sequence_number": seq,
+            "ciphertext": encrypted_payload
+        }
+
+        msg = self._message(MessageType.MSG, self.username, room, TargetType.ROOM, json.dumps(msg_payload))
         self.pending_messages[msg["msg_id"]] = MessageState.PENDING
         self._emit(MessageStatusChanged(msg["msg_id"], MessageState.PENDING))
         await self.transport.send_frame(msg)
@@ -174,27 +212,60 @@ class SecureChatApp(Generic[TTransport]):
             except Exception:
                 pass
                 
+        elif msg_type == MessageType.ROOM_KEY.value:
+            sender = frame["sender"]
+            try:
+                sender_key = self.shared_keys.get(sender)
+                if sender_key:
+                    dec = self.crypto.decrypt(sender_key, frame["payload"])
+                    room_id = dec["room_id"]
+                    key_ver = int(dec["key_version"])
+                    raw_rk = base64.b64decode(dec["room_key"].encode("ascii"))
+                    self.room_keys[room_id] = (raw_rk, key_ver)
+                    self.shared_keys[room_id] = raw_rk
+            except Exception:
+                pass
+
         elif msg_type == MessageType.MSG.value:
             sender = frame["sender"]
             target = frame["target"]
             target_type = frame.get("target_type")
             
             if target_type == TargetType.ROOM.value:
+                room_info = self.room_keys.get(target)
+                if not room_info and target in self.shared_keys:
+                    room_info = (self.shared_keys[target], 1)
+                    self.room_keys[target] = room_info
+
+                if room_info:
+                    room_key, key_version = room_info
+                    try:
+                        data = json.loads(frame["payload"])
+                        if isinstance(data, dict) and "ciphertext" in data:
+                            msg_kv = data.get("key_version", 1)
+                            seq = data.get("sequence_number", 0)
+                            room_seqs = self.room_sequences.setdefault(target, {})
+                            if seq > 0 and seq <= room_seqs.get(sender, 0):
+                                raise ValueError("Replay detected in room")
+                            aad = ChatCrypto.build_aad(1, MessageType.MSG.value, TargetType.ROOM.value, target, msg_kv, sender, seq)
+                            try:
+                                plaintext_payload = self.crypto.decrypt(room_key, data["ciphertext"], aad=aad)
+                            except Exception:
+                                plaintext_payload = self.crypto.decrypt(room_key, data["ciphertext"], aad=b"")
+                            if seq > 0:
+                                room_seqs[sender] = seq
+                            self._emit(MessageReceived(sender, target, str(plaintext_payload.get("text", ""))))
+                            return
+                    except Exception:
+                        pass
+
                 shared_key = self.shared_keys.get(target)
                 if shared_key is not None:
                     try:
-                        # Legacy/test room handling without AAD for the old tests
-                        # If it's a JSON payload with ciphertext, we try to decrypt it that way.
-                        # Since test_websocket sends raw ciphertext in tests (or JSON?), let's support both.
                         try:
                             data = json.loads(frame["payload"])
                             if "ciphertext" in data:
-                                # AAD requires key_version etc. which we don't have in app.py room tracking right now.
-                                # Wait, in the Python tests, test_room_crypto manually encrypts.
-                                # But test_websocket uses send_room_message? No, test_websocket uses send_direct_message with TargetType.ROOM?
-                                # Let's see how test_websocket sends room messages. 
-                                # It just uses `shared_keys[target]`.
-                                plaintext_payload = self.crypto.decrypt(shared_key, data["ciphertext"], aad=b"") # dummy AAD if tests use it? No, test_websocket probably doesn't use AAD yet.
+                                plaintext_payload = self.crypto.decrypt(shared_key, data["ciphertext"], aad=b"")
                             else:
                                 plaintext_payload = self.crypto.decrypt(shared_key, frame["payload"])
                         except (json.JSONDecodeError, TypeError):

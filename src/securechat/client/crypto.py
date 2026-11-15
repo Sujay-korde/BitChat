@@ -100,6 +100,88 @@ class ChatCrypto:
             raise ValueError("Message authentication failed") from exc
         return json.loads(plaintext.decode("utf-8"))
 
+    @property
+    def identity_public_key_bytes(self) -> bytes:
+        return self._identity_key.public_key().public_bytes(
+            encoding=serialization.Encoding.Raw,
+            format=serialization.PublicFormat.Raw,
+        )
+
+    def sign_auth_payload(self, username: str, timestamp: int) -> dict[str, str]:
+        ident_pub_b64 = base64.b64encode(self.identity_public_key_bytes).decode("ascii")
+        context = b"SecureChat-Auth-V1:" + username.encode("utf-8") + b":" + str(timestamp).encode("utf-8")
+        sig = self._identity_key.sign(context)
+        return {
+            "username": username,
+            "identity_key": ident_pub_b64,
+            "signature": base64.b64encode(sig).decode("ascii"),
+            "timestamp": str(timestamp)
+        }
+
+    @staticmethod
+    def verify_auth_signature(username: str, timestamp: int, identity_key_b64: str, signature_b64: str) -> bool:
+        try:
+            pub_bytes = base64.b64decode(identity_key_b64.encode("ascii"))
+            sig_bytes = base64.b64decode(signature_b64.encode("ascii"))
+            pub_key = ed25519.Ed25519PublicKey.from_public_bytes(pub_bytes)
+            context = b"SecureChat-Auth-V1:" + username.encode("utf-8") + b":" + str(timestamp).encode("utf-8")
+            pub_key.verify(sig_bytes, context)
+            return True
+        except Exception:
+            return False
+
+    @staticmethod
+    def get_fingerprint(identity_key_b64: str) -> str:
+        """Derive an out-of-band visual verification fingerprint (groups of 4 hex chars)."""
+        pub_bytes = base64.b64decode(identity_key_b64.encode("ascii"))
+        digest = hashes.Hash(hashes.SHA256())
+        digest.update(pub_bytes)
+        hex_digest = digest.finalize().hex().upper()
+        return " ".join(hex_digest[i:i+4] for i in range(0, 24, 4))
+
+    @staticmethod
+    def encrypt_attachment(file_bytes: bytes, file_name: str, mime_type: str) -> tuple[bytes, dict[str, Any]]:
+        raw_key = os.urandom(32)
+        iv = os.urandom(12)
+        
+        digest = hashes.Hash(hashes.SHA256())
+        digest.update(file_bytes)
+        sha256_hex = digest.finalize().hex()
+
+        aesgcm = AESGCM(raw_key)
+        ciphertext = aesgcm.encrypt(iv, file_bytes, None)
+
+        descriptor = {
+            "type": "attachment",
+            "key": base64.b64encode(raw_key).decode("ascii"),
+            "iv": base64.b64encode(iv).decode("ascii"),
+            "sha256": sha256_hex,
+            "file_name": file_name,
+            "mime_type": mime_type,
+            "size": len(file_bytes)
+        }
+        return ciphertext, descriptor
+
+    @staticmethod
+    def decrypt_attachment(ciphertext: bytes, key_b64: str, iv_b64: str, expected_sha256: str) -> bytes:
+        raw_key = base64.b64decode(key_b64.encode("ascii"))
+        iv = base64.b64decode(iv_b64.encode("ascii"))
+        
+        aesgcm = AESGCM(raw_key)
+        try:
+            plaintext = aesgcm.decrypt(iv, ciphertext, None)
+        except InvalidTag as exc:
+            raise ValueError("Attachment decryption failed: bad key or tampered ciphertext") from exc
+
+        digest = hashes.Hash(hashes.SHA256())
+        digest.update(plaintext)
+        computed_sha256 = digest.finalize().hex()
+
+        if computed_sha256 != expected_sha256:
+            raise ValueError("Attachment integrity check failed: SHA-256 mismatch")
+
+        return plaintext
+
     @staticmethod
     def build_aad(protocol_version: int, msg_type: str, target_type: str, target: str, key_version: int, sender: str, sequence: int) -> bytes:
         aad = bytearray([protocol_version])

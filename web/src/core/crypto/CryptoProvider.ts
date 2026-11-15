@@ -1,10 +1,17 @@
+import type { AttachmentDescriptor } from "../client/events";
+export type { AttachmentDescriptor };
+
 export interface CryptoProvider {
-  generateIdentity(): Promise<void>;
+  generateIdentity(username?: string): Promise<void>;
   getPublicKey(sender: string, target: string): Promise<string>;
   deriveSharedKey(sender: string, target: string, peerPayloadJson: string): Promise<string | Uint8Array>;
   encrypt(target: string | Uint8Array, plaintext: string, aad?: Uint8Array): Promise<string>;
   decrypt(sender: string | Uint8Array, ciphertext: string, aad?: Uint8Array): Promise<string>;
   generateRoomKey(): Promise<Uint8Array>;
+  signAuth?(username: string, timestamp: number): Promise<{ username: string; identity_key: string; signature: string; timestamp: string }>;
+  getFingerprint?(identityKeyB64?: string): Promise<string>;
+  encryptAttachment?(fileBytes: Uint8Array, fileName: string, mimeType: string): Promise<{ ciphertext: Uint8Array; descriptor: Omit<AttachmentDescriptor, "blob_id"> }>;
+  decryptAttachment?(ciphertext: Uint8Array, keyB64: string, ivB64: string, expectedSha256: string): Promise<Uint8Array>;
 }
 
 export class CryptoNotAvailableError extends Error {

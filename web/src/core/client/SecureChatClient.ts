@@ -3,11 +3,99 @@ import { validateMessageEnvelope } from "../protocol/schema";
 import type { MessageEnvelope } from "../protocol/schema";
 import { MessageType, TargetType } from "../protocol/types";
 import { ConnectionState, MessageState } from "./events";
-import type { EventCallback, SecureChatEvent } from "./events";
+import type { EventCallback, SecureChatEvent, AttachmentDescriptor } from "./events";
 import type { CryptoProvider } from "../crypto/CryptoProvider";
 import type { ModerationProvider } from "../moderation/ModerationProvider";
 
 export class SecureChatClient {
+  private _bytesToBase64(bytes: Uint8Array): string {
+    let binary = '';
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
+  }
+
+  private _base64ToBytes(base64: string): Uint8Array {
+    if (!base64 || typeof base64 !== 'string') return new Uint8Array(0);
+    try {
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      return bytes;
+    } catch {
+      return new Uint8Array(0);
+    }
+  }
+
+  private _saveState() {
+    if (!this.username) return;
+    try {
+      if (typeof localStorage === 'undefined') return;
+      const state = {
+        sharedKeys: Array.from(this.sharedKeys.entries()).map(([k, v]) => [
+          k,
+          typeof v === 'string' ? v : this._bytesToBase64(v)
+        ]),
+        roomKeys: Array.from(this.roomKeys.entries()).map(([k, v]) => [
+          k,
+          { key: this._bytesToBase64(v.key), version: v.version }
+        ]),
+        dmSequences: Array.from(this.dmSequences.entries()),
+        myDmSequences: Array.from(this.myDmSequences.entries()),
+        roomSequences: Array.from(this.roomSequences.entries()).map(([room, userMap]) => [
+          room,
+          Array.from(userMap.entries())
+        ]),
+        myRoomSequences: Array.from(this.myRoomSequences.entries()),
+      };
+      localStorage.setItem(`securechat_client_state_${this.username}`, JSON.stringify(state));
+    } catch (e) {
+      console.warn("Failed to save state", e);
+    }
+  }
+
+  private _loadState() {
+    if (!this.username) return;
+    try {
+      if (typeof localStorage === 'undefined') return;
+      const saved = localStorage.getItem(`securechat_client_state_${this.username}`);
+      if (saved) {
+        const state = JSON.parse(saved);
+        if (state.sharedKeys && Array.isArray(state.sharedKeys)) {
+          for (const [k, v] of state.sharedKeys) {
+            if (typeof v === 'string') {
+              const b = this._base64ToBytes(v);
+              if (b.length > 0) this.sharedKeys.set(k, b);
+            }
+          }
+        }
+        if (state.roomKeys && Array.isArray(state.roomKeys)) {
+          for (const [room, rk] of state.roomKeys) {
+            if (rk && typeof rk.key === 'string') {
+              const b = this._base64ToBytes(rk.key);
+              if (b.length > 0) {
+                this.roomKeys.set(room, { key: b, version: rk.version || 1 });
+              }
+            }
+          }
+        }
+        if (state.dmSequences) this.dmSequences = new Map(state.dmSequences);
+        if (state.myDmSequences) this.myDmSequences = new Map(state.myDmSequences);
+        if (state.roomSequences && Array.isArray(state.roomSequences)) {
+          for (const [room, userList] of state.roomSequences) {
+            this.roomSequences.set(room, new Map(userList));
+          }
+        }
+        if (state.myRoomSequences) this.myRoomSequences = new Map(state.myRoomSequences);
+      }
+    } catch (e) {
+      console.warn("Failed to load state", e);
+    }
+  }
+
   private transport: Transport;
   private crypto: CryptoProvider;
   private moderation: ModerationProvider;
@@ -20,6 +108,8 @@ export class SecureChatClient {
   private myRoomSequences: Map<string, number> = new Map();
   private dmSequences: Map<string, number> = new Map();
   private myDmSequences: Map<string, number> = new Map();
+  private joinedRooms: Set<string> = new Set();
+  private sentKxPeers: Set<string> = new Set();
   
   private heartbeatInterval: any = null;
   private shouldReconnect: boolean = true;
@@ -57,6 +147,7 @@ export class SecureChatClient {
        return; // Already connecting or connected
     }
     this.username = username;
+    this._loadState();
     this.shouldReconnect = true;
     this.setState(ConnectionState.CONNECTING);
     this._connectLoop();
@@ -80,7 +171,17 @@ export class SecureChatClient {
 
         // Authenticate
         this.setState(ConnectionState.AUTHENTICATING);
-        await this._sendRaw(MessageType.AUTH, "server", TargetType.USER, { username: this.username });
+        const currentUsername = this.username || "";
+        let authPayload: any = { username: currentUsername };
+        if (this.crypto.signAuth && currentUsername) {
+          try {
+            const signed = await this.crypto.signAuth(currentUsername, Math.floor(Date.now() / 1000));
+            authPayload = signed;
+          } catch (e) {
+            console.warn("Failed to sign auth payload, falling back to plain username", e);
+          }
+        }
+        await this._sendRaw(MessageType.AUTH, "server", TargetType.USER, authPayload);
         
         // Wait for AUTH_OK or AUTH_FAIL
         // The receive loop will handle it and set state to READY
@@ -120,6 +221,10 @@ export class SecureChatClient {
       case MessageType.AUTH_OK:
         this.setState(ConnectionState.READY);
         this._startHeartbeat();
+        // Restore room memberships on reconnect
+        for (const room of this.joinedRooms) {
+          void this._sendRaw(MessageType.JOIN, room, TargetType.ROOM, "");
+        }
         break;
       case MessageType.AUTH_FAIL:
         this.dispatch({ type: "ErrorOccurred", reason: `Auth failed: ${envelope.payload}` });
@@ -200,6 +305,7 @@ export class SecureChatClient {
             const plaintext = await this.crypto.decrypt(sharedKey, data.ciphertext, aad);
             
             this.dmSequences.set(envelope.sender, seq);
+            this._saveState();
             
             this.dispatch({
               type: "MessageReceived",
@@ -242,7 +348,14 @@ export class SecureChatClient {
           if (!this.username) throw new Error("Not authenticated");
           const sharedKey = await this.crypto.deriveSharedKey(envelope.sender, this.username, envelope.payload);
           this.sharedKeys.set(envelope.sender, sharedKey);
+          this._saveState();
           this.dispatch({ type: "KeyExchangeCompleted", peer: envelope.sender });
+
+          // Bidirectional key exchange: if we have not initiated key exchange to this peer yet, send ours back
+          if (!this.sentKxPeers.has(envelope.sender)) {
+            this.sentKxPeers.add(envelope.sender);
+            await this.sendKeyExchange(envelope.sender);
+          }
         } catch (e) {
           console.error("Key exchange failed", e);
         }
@@ -269,9 +382,10 @@ export class SecureChatClient {
   private async _sendRaw(type: MessageType, target: string, targetType: TargetType, payload: any) {
     if (!this.username) throw new Error("Not authenticated");
     
+    const randSuffix = Math.random().toString(36).substring(2, 8);
     const envelope: MessageEnvelope = {
       type,
-      msg_id: `${this.username}-${Date.now()}`,
+      msg_id: `${this.username}-${Date.now()}-${randSuffix}`,
       sender: this.username,
       target,
       target_type: targetType,
@@ -327,11 +441,18 @@ export class SecureChatClient {
 
     let payloadJson: string;
     try {
-      const roomCtx = this.roomKeys.get(room);
-      if (!roomCtx) throw new Error("No room key for room");
+      let roomCtx = this.roomKeys.get(room);
+      if (!roomCtx) {
+        // Auto-generate room key v1 if none exists for this room
+        const rawKey = await this.crypto.generateRoomKey();
+        roomCtx = { key: rawKey, version: 1 };
+        this.roomKeys.set(room, roomCtx);
+        this._saveState();
+      }
       
       const seq = (this.myRoomSequences.get(room) || 0) + 1;
       this.myRoomSequences.set(room, seq);
+      this._saveState();
 
       const aad = this._buildAAD(1, MessageType.MSG, TargetType.ROOM, room, roomCtx.version, this.username, seq);
       const ciphertext = await this.crypto.encrypt(roomCtx.key, text, aad);
@@ -381,6 +502,7 @@ export class SecureChatClient {
       
       const seq = (this.myDmSequences.get(peer) || 0) + 1;
       this.myDmSequences.set(peer, seq);
+      this._saveState();
       
       const aad = this._buildAAD(1, MessageType.MSG, TargetType.USER, peer, 0, this.username, seq);
       const ciphertext = await this.crypto.encrypt(sharedKey, text, aad);
@@ -416,17 +538,20 @@ export class SecureChatClient {
   async sendKeyExchange(target: string) {
     if (this.state !== ConnectionState.READY) throw new Error("Not ready");
     if (!this.username) throw new Error("Not authenticated");
+    this.sentKxPeers.add(target);
     const payload = await this.crypto.getPublicKey(this.username, target);
     await this._sendRaw(MessageType.KEY_EXCHANGE, target, TargetType.USER, payload);
   }
 
   async joinRoom(room: string) {
-    if (this.state !== ConnectionState.READY) throw new Error("Not ready");
+    this.joinedRooms.add(room);
+    if (this.state !== ConnectionState.READY) return;
     await this._sendRaw(MessageType.JOIN, room, TargetType.ROOM, "");
   }
 
   async leaveRoom(room: string) {
-    if (this.state !== ConnectionState.READY) throw new Error("Not ready");
+    this.joinedRooms.delete(room);
+    if (this.state !== ConnectionState.READY) return;
     await this._sendRaw(MessageType.LEAVE, room, TargetType.ROOM, "");
   }
 
@@ -456,5 +581,26 @@ export class SecureChatClient {
       const ciphertext = await this.crypto.encrypt(sharedKey, payload);
       await this._sendRaw(MessageType.ROOM_KEY, member, TargetType.USER, ciphertext);
     }
+  }
+
+  async encryptAttachment(fileBytes: Uint8Array, fileName: string, mimeType: string): Promise<{ ciphertext: Uint8Array; descriptor: Omit<AttachmentDescriptor, "blob_id"> }> {
+    if (!this.crypto.encryptAttachment) {
+      throw new Error("Attachment encryption not supported by crypto provider");
+    }
+    return this.crypto.encryptAttachment(fileBytes, fileName, mimeType);
+  }
+
+  async decryptAttachment(ciphertext: Uint8Array, keyB64: string, ivB64: string, expectedSha256: string): Promise<Uint8Array> {
+    if (!this.crypto.decryptAttachment) {
+      throw new Error("Attachment decryption not supported by crypto provider");
+    }
+    return this.crypto.decryptAttachment(ciphertext, keyB64, ivB64, expectedSha256);
+  }
+
+  async getFingerprint(identityKeyB64?: string): Promise<string> {
+    if (this.crypto.getFingerprint) {
+      return this.crypto.getFingerprint(identityKeyB64);
+    }
+    return "N/A";
   }
 }

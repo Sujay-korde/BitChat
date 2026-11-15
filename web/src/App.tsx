@@ -48,6 +48,12 @@ function App() {
         case "ErrorOccurred":
           setError(event.reason);
           break;
+        case "EncryptionUnavailable":
+          setError("Message encryption unavailable: cryptographic key exchange pending or not established yet.");
+          break;
+        case "ModerationRejected":
+          setError(`Message blocked: content did not pass local moderation filter.`);
+          break;
       }
     });
 
@@ -59,7 +65,7 @@ function App() {
     setError(null);
     try {
       transport.setUri(serverUrl);
-      await crypto.generateIdentity();
+      await crypto.generateIdentity(username);
       await client.connect(username);
     } catch (e: any) {
       setError(`Failed to connect: ${e.message || String(e)}`);

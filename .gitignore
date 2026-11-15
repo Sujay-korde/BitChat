@@ -6,3 +6,20 @@ build/
 dist/
 *.egg-info/
 node_modules/
+
+# Scratch & temporary test scripts
+scratch/
+
+# Runtime media blob storage (keep directory via .gitkeep)
+src/securechat/server/media_storage/*
+!src/securechat/server/media_storage/.gitkeep
+
+# Vercel & environment
+.vercel/
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/

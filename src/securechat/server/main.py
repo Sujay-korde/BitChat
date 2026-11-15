@@ -13,6 +13,7 @@ from websockets.asyncio.server import ServerConnection
 from securechat.protocol.framing import FrameError, read_frame, write_frame
 from securechat.protocol.schema import SchemaError, validate_message_envelope
 from securechat.protocol.types import MessageType, TargetType
+from .media import MediaBlobServer
 from .presence import PresenceManager
 from .rooms import RoomManager
 from .router import MessageRouter
@@ -29,10 +30,14 @@ class ChatServer:
     host: str = "127.0.0.1"
     port: int = 8765
     ws_port: int = 8766
+    media_port: int = 8767
     router: MessageRouter = field(default_factory=MessageRouter)
     rooms: RoomManager = field(default_factory=RoomManager)
     presence: PresenceManager = field(default_factory=PresenceManager)
     sessions: dict[str, ChatSession] = field(default_factory=dict)
+    message_queue: dict[str, list[dict[str, object]]] = field(default_factory=dict)
+    registered_identities: dict[str, str] = field(default_factory=dict)
+    media_server: MediaBlobServer | None = None
     _prune_task: asyncio.Task | None = None
 
     async def start(self) -> None:
@@ -47,8 +52,10 @@ class ChatServer:
                 self._prune_task.cancel()
 
     async def start_all(self) -> None:
-        """Start both TCP and WebSocket servers concurrently."""
+        """Start TCP, WebSocket, and Media Blob servers concurrently."""
         self._prune_task = asyncio.create_task(self._prune_dead_sessions())
+        self.media_server = MediaBlobServer(host=self.host, port=self.media_port)
+        await self.media_server.start()
         try:
             tcp_server = await asyncio.start_server(self._handle_tcp_client, self.host, self.port)
             logger.info("TCP server listening on %s:%d", self.host, self.port)
@@ -66,6 +73,8 @@ class ChatServer:
                     ws_server.wait_closed(),
                 )
         finally:
+            if self.media_server:
+                await self.media_server.stop()
             if self._prune_task:
                 self._prune_task.cancel()
 
@@ -105,9 +114,21 @@ class ChatServer:
             except Exception:
                 pass
 
-    async def _cleanup_session(self, username: str) -> None:
+    MAX_OFFLINE_QUEUE_PER_USER: int = 100
+
+    def _enqueue_offline_message(self, target: str, message: dict[str, object]) -> None:
+        queue = self.message_queue.setdefault(target, [])
+        if len(queue) >= self.MAX_OFFLINE_QUEUE_PER_USER:
+            queue.pop(0)  # Drop oldest message to bound memory usage
+        queue.append(message)
+
+    async def _cleanup_session(self, username: str, writer: Any = None) -> None:
         if username not in self.sessions:
             return
+
+        session = self.sessions[username]
+        if writer is not None and session.writer is not writer:
+            return  # The session has been replaced by a newer connection! Do not clean up the new one.
 
         session = self.sessions.pop(username)
         self.presence.set_offline(username)
@@ -152,6 +173,8 @@ class ChatServer:
                         await tcp_send(self._response(MessageType.ERROR, "server", err_user, "user", str(exc)))
                     except Exception:
                         pass
+                    if "Frame too large" in str(exc):
+                        break  # An oversized payload was not read, leaving the TCP stream unaligned
                     continue
 
                 result = await self._process_action(action, tcp_send, username, writer)
@@ -161,7 +184,7 @@ class ChatServer:
             pass
         finally:
             if username:
-                await self._cleanup_session(username)
+                await self._cleanup_session(username, writer)
             else:
                 writer.close()
                 try:
@@ -184,6 +207,9 @@ class ChatServer:
                 if not isinstance(raw_text, str):
                     await ws_send(self._response(MessageType.ERROR, "server", username or "anonymous", "user", "Binary frames not supported"))
                     continue
+                if len(raw_text) > 1024 * 1024:
+                    await ws_send(self._response(MessageType.ERROR, "server", username or "anonymous", "user", "Frame too large: maximum size is 1MB"))
+                    continue
                 try:
                     raw_message = json.loads(raw_text)
                     envelope = validate_message_envelope(raw_message)
@@ -205,7 +231,7 @@ class ChatServer:
             pass
         finally:
             if username:
-                await self._cleanup_session(username)
+                await self._cleanup_session(username, websocket)
 
     # ------------------------------------------------------------------ #
     #  Shared protocol processing (transport-agnostic)
@@ -225,6 +251,41 @@ class ChatServer:
         """
         if action.kind == "auth":
             new_username = action.payload["username"]
+
+            # Cryptographic signature verification if provided
+            identity_key = action.payload.get("identity_key")
+            signature = action.payload.get("signature")
+            timestamp_str = action.payload.get("timestamp")
+
+            if identity_key and signature:
+                from securechat.client.crypto import ChatCrypto
+                ts = int(timestamp_str) if timestamp_str else int(time.time())
+                is_valid = ChatCrypto.verify_auth_signature(new_username, ts, identity_key, signature)
+                if not is_valid:
+                    logger.warning("AUTH_FAIL: Invalid cryptographic signature for %s", new_username)
+                    await send_fn(self._response(MessageType.AUTH_FAIL, "server", new_username, "user", "Invalid authentication signature"))
+                    return None
+
+                # Enforce identity binding per username to prevent account takeover
+                if new_username in self.registered_identities:
+                    if self.registered_identities[new_username] != identity_key:
+                        logger.warning("AUTH_FAIL: Identity key mismatch for %s", new_username)
+                        await send_fn(self._response(MessageType.AUTH_FAIL, "server", new_username, "user", "Identity key does not match registered owner"))
+                        return None
+                else:
+                    self.registered_identities[new_username] = identity_key
+
+            if new_username in self.sessions:
+                old_session = self.sessions[new_username]
+                if old_session.writer is not writer:
+                    try:
+                        if hasattr(old_session.writer, "close"):
+                            res = old_session.writer.close()
+                            if asyncio.iscoroutine(res):
+                                await res
+                    except Exception:
+                        pass
+
             self.sessions[new_username] = ChatSession(
                 username=new_username,
                 writer=writer,
@@ -235,17 +296,38 @@ class ChatServer:
             self.presence.set_online(new_username)
             logger.info("Authenticated: %s", new_username)
             await send_fn(self._response(MessageType.AUTH_OK, new_username, new_username, "user", "ok"))
+            
+            if new_username in self.message_queue:
+                for msg in self.message_queue[new_username]:
+                    try:
+                        await send_fn(msg)
+                    except Exception as e:
+                        logger.error("Failed to deliver offline message to %s: %s", new_username, e)
+                del self.message_queue[new_username]
+                
             return new_username
 
         if username is None:
             await send_fn(self._response(MessageType.AUTH_FAIL, "server", "anonymous", "user", "authenticate first"))
             return None
 
+        # Enforce sender authenticity: an authenticated client cannot forge another sender
+        if hasattr(action, "payload") and isinstance(action.payload, dict):
+            if "sender" in action.payload:
+                action.payload["sender"] = username
+            if "username" in action.payload:
+                action.payload["username"] = username
+
         session = self.sessions.setdefault(
             username,
             ChatSession(username=username, writer=writer, send_fn=send_fn, is_authenticated=True),
         )
         session.last_heartbeat = time.time()
+
+        if action.kind in ("message", "key_exchange", "room_key") and not session.consume_token():
+            logger.warning("Rate limit exceeded for %s", username)
+            await send_fn(self._response(MessageType.ERROR, "server", username, "user", "Rate limit exceeded. Please slow down."))
+            return None
 
         if action.kind == "join":
             room = action.payload["room"]
@@ -287,15 +369,21 @@ class ChatServer:
     #  Relay helpers (transport-agnostic, use session.send_fn)
     # ------------------------------------------------------------------ #
 
+    async def _safe_send(self, session: ChatSession, message: dict[str, object], timeout: float = 2.0) -> None:
+        try:
+            await asyncio.wait_for(session.send_fn(message), timeout=timeout)
+        except Exception:
+            pass
+
     async def _broadcast_presence(self, room: str, username: str, event: str) -> None:
         message = self._response(MessageType.PRESENCE, "server", room, TargetType.ROOM.value, f"{username}:{event}")
-        for member in self.rooms.members(room):
-            if member != username and member in self.sessions:
-                session = self.sessions[member]
-                try:
-                    await session.send_fn(message)
-                except Exception:
-                    pass
+        send_tasks = [
+            self._safe_send(self.sessions[member], message)
+            for member in self.rooms.members(room)
+            if member != username and member in self.sessions
+        ]
+        if send_tasks:
+            await asyncio.gather(*send_tasks, return_exceptions=True)
 
     async def _relay_key_exchange(self, username: str, payload: dict[str, str]) -> None:
         target = payload["target"]
@@ -307,6 +395,9 @@ class ChatServer:
                 await session.send_fn(message)
             except Exception:
                 pass
+        else:
+            message = self._response(MessageType.KEY_EXCHANGE, sender, target, TargetType.USER.value, payload["payload"])
+            self._enqueue_offline_message(target, message)
 
     async def _relay_room_key(self, username: str, payload: dict[str, str]) -> None:
         target = payload["target"]
@@ -318,29 +409,39 @@ class ChatServer:
                 await session.send_fn(message)
             except Exception:
                 pass
+        else:
+            message = self._response(MessageType.ROOM_KEY, sender, target, TargetType.USER.value, payload["payload"])
+            self._enqueue_offline_message(target, message)
 
     async def _relay_ciphertext(self, payload: dict[str, str]) -> None:
         target = payload["target"]
         target_type = payload["target_type"]
         sender = payload["sender"]
+        msg_id = payload.get("msg_id", "server-response")
 
-        message = self._response(MessageType.MSG, sender, target, target_type, payload["ciphertext"])
+        message = {
+            "type": MessageType.MSG.value,
+            "msg_id": msg_id,
+            "sender": sender,
+            "target": target,
+            "target_type": target_type,
+            "timestamp": int(time.time()),
+            "payload": payload["ciphertext"],
+        }
 
         if target_type == TargetType.ROOM.value:
-            for member in self.rooms.members(target):
-                if member != sender and member in self.sessions:
-                    session = self.sessions[member]
-                    try:
-                        await session.send_fn(message)
-                    except Exception:
-                        pass
+            send_tasks = [
+                self._safe_send(self.sessions[member], message)
+                for member in self.rooms.members(target)
+                if member != sender and member in self.sessions
+            ]
+            if send_tasks:
+                await asyncio.gather(*send_tasks, return_exceptions=True)
         elif target_type == TargetType.USER.value:
             if target in self.sessions:
-                session = self.sessions[target]
-                try:
-                    await session.send_fn(message)
-                except Exception:
-                    pass
+                await self._safe_send(self.sessions[target], message)
+            else:
+                self._enqueue_offline_message(target, message)
 
     def _response(self, message_type: MessageType, sender: str, target: str, target_type: str, payload: str) -> dict[str, object]:
         return {

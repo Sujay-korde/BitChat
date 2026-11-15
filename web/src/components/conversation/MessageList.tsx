@@ -2,6 +2,8 @@ import { useEffect, useRef } from 'react';
 import { useConversationStore } from '../../state/conversationStore';
 import { useConnectionStore } from '../../state/connectionStore';
 import { MessageState } from '../../core/client/events';
+import { AttachmentItem } from './AttachmentItem';
+import type { AttachmentDescriptor } from '../../core/client/events';
 
 interface MessageListProps {
   activePeer: string;
@@ -18,57 +20,103 @@ export function MessageList({ activePeer }: MessageListProps) {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const getStatusIcon = (status?: MessageState) => {
-    switch (status) {
-      case MessageState.PENDING: return '○';
-      case MessageState.SENT: return '✓';
-      case MessageState.FAILED: return '!';
-      default: return '';
+  const tryParseAttachment = (text: string): AttachmentDescriptor | null => {
+    if (!text || typeof text !== 'string' || !text.startsWith('{"type":"attachment"')) {
+      return null;
     }
+    try {
+      const parsed = JSON.parse(text);
+      if (
+        parsed.type === 'attachment' &&
+        typeof parsed.blob_id === 'string' &&
+        typeof parsed.key === 'string' &&
+        typeof parsed.iv === 'string' &&
+        typeof parsed.sha256 === 'string'
+      ) {
+        return parsed as AttachmentDescriptor;
+      }
+    } catch {
+      // not JSON
+    }
+    return null;
+  };
+
+  const formatTime = (ts?: number) => {
+    if (!ts) return '';
+    const d = new Date(ts);
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
   return (
-    <div style={{ padding: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+    <div style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
       {messages.length === 0 ? (
-        <div style={{ color: 'var(--color-text-muted)', textAlign: 'center', marginTop: 'var(--space-8)' }}>
-          No messages yet. Send a message to start the conversation.
+        <div style={{ color: '#667781', textAlign: 'center', marginTop: '32px', fontSize: '14px' }}>
+          🔒 Messages and calls are end-to-end encrypted. No one outside of this chat can read them.
         </div>
       ) : (
         messages.map((msg, idx) => {
           const isOwn = msg.sender === currentUser;
+          const attachment = tryParseAttachment(msg.text);
+
           return (
             <div key={`${msg.id}-${idx}`} style={{
               alignSelf: isOwn ? 'flex-end' : 'flex-start',
-              maxWidth: '70%',
+              maxWidth: '68%',
               display: 'flex',
               flexDirection: 'column',
-              gap: '4px'
+              position: 'relative',
+              marginBottom: '2px'
             }}>
-              <div style={{
-                fontSize: 'var(--text-xs)',
-                color: 'var(--color-text-muted)',
-                textAlign: isOwn ? 'right' : 'left'
-              }}>
-                {msg.sender}
-              </div>
-              <div style={{
-                background: isOwn ? 'var(--color-brand-primary)' : 'var(--color-bg-surface-elevated)',
-                color: isOwn ? 'var(--color-bg-base)' : 'var(--color-text-primary)',
-                padding: '8px 12px',
-                borderRadius: 'var(--radius-md)',
-                wordBreak: 'break-word'
-              }}>
-                {msg.text}
-              </div>
-              {isOwn && (
+              {!isOwn && (
                 <div style={{
-                  fontSize: 'var(--text-xs)',
-                  color: msg.status === MessageState.FAILED ? 'var(--color-danger)' : 'var(--color-text-muted)',
-                  textAlign: 'right'
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: '#128c7e',
+                  marginBottom: '2px',
+                  paddingLeft: '4px'
                 }}>
-                  {getStatusIcon(msg.status)} {msg.status}
+                  {msg.sender}
                 </div>
               )}
+              <div style={{
+                background: isOwn ? '#d9fdd3' : '#ffffff',
+                color: '#111b21',
+                padding: '6px 9px 8px 10px',
+                borderRadius: isOwn ? '8px 8px 2px 8px' : '8px 8px 8px 2px',
+                boxShadow: '0 1px 0.5px rgba(11, 20, 26, 0.13)',
+                wordBreak: 'break-word',
+                position: 'relative',
+                display: 'inline-block',
+                minWidth: '90px'
+              }}>
+                {attachment ? (
+                  <AttachmentItem descriptor={attachment} />
+                ) : (
+                  <span style={{ fontSize: '14.2px', lineHeight: '19px', whiteSpace: 'pre-wrap' }}>
+                    {msg.text}
+                  </span>
+                )}
+                <div style={{
+                  float: 'right',
+                  margin: '4px 0 -2px 8px',
+                  fontSize: '11px',
+                  color: '#667781',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}>
+                  <span>{formatTime(msg.timestamp)}</span>
+                  {isOwn && (
+                    <span style={{
+                      color: msg.status === MessageState.SENT ? '#53bdeb' : (msg.status === MessageState.FAILED ? '#ea0038' : '#8696a0'),
+                      fontSize: '12px',
+                      fontWeight: 'bold'
+                    }}>
+                      {msg.status === MessageState.SENT ? '✓✓' : (msg.status === MessageState.FAILED ? '!' : '✓')}
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
           );
         })

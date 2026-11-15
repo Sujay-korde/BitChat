@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import Any
 
@@ -16,7 +17,14 @@ class RoutedAction:
 class MessageRouter:
     def route(self, envelope: MessageEnvelope) -> RoutedAction:
         if envelope.type == MessageType.AUTH:
-            return RoutedAction("auth", {"username": envelope.sender})
+            auth_payload: dict[str, Any] = {"username": envelope.sender}
+            try:
+                data = json.loads(envelope.payload)
+                if isinstance(data, dict):
+                    auth_payload.update(data)
+            except Exception:
+                pass
+            return RoutedAction("auth", auth_payload)
         if envelope.type == MessageType.JOIN:
             return RoutedAction("join", {"room": envelope.target, "username": envelope.sender})
         if envelope.type == MessageType.LEAVE:

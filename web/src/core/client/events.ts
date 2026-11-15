@@ -65,6 +65,18 @@ export interface EncryptionUnavailable extends AppEvent {
   type: "EncryptionUnavailable";
 }
 
+export interface AttachmentDescriptor {
+  type: "attachment";
+  blob_id: string;
+  key: string;
+  iv: string;
+  sha256: string;
+  file_name: string;
+  mime_type: string;
+  size: number;
+  caption?: string;
+}
+
 export type SecureChatEvent = 
   | ConnectionChanged 
   | MessageReceived 

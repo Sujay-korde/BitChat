@@ -49,12 +49,81 @@ export class WebCryptoProvider implements CryptoProvider {
     return bytes;
   }
 
-  async generateIdentity(): Promise<void> {
+  async generateIdentity(username?: string): Promise<void> {
+    const hasStorage = typeof localStorage !== 'undefined';
+    const prefix = username ? `securechat_${username}_` : null;
+
+    if (hasStorage && prefix) {
+      const savedIdPriv = localStorage.getItem(`${prefix}identityPrivateKey`);
+      const savedIdPub = localStorage.getItem(`${prefix}identityPublicKey`);
+      const savedEphPriv = localStorage.getItem(`${prefix}ephemeralPrivateKey`);
+      const savedEphPub = localStorage.getItem(`${prefix}ephemeralPublicKey`);
+
+      if (savedIdPriv && savedIdPub && savedEphPriv && savedEphPub) {
+        try {
+          this.identityPrivateKey = this.base64ToBytes(savedIdPriv);
+          this.identityPublicKey = this.base64ToBytes(savedIdPub);
+          this.ephemeralPrivateKey = this.base64ToBytes(savedEphPriv);
+          this.ephemeralPublicKey = this.base64ToBytes(savedEphPub);
+          return;
+        } catch {
+          // If stored keys are corrupted, generate new ones
+        }
+      }
+    }
+
     this.identityPrivateKey = ed25519.utils.randomSecretKey();
     this.identityPublicKey = ed25519.getPublicKey(this.identityPrivateKey);
 
     this.ephemeralPrivateKey = x25519.utils.randomSecretKey();
     this.ephemeralPublicKey = x25519.getPublicKey(this.ephemeralPrivateKey);
+
+    if (hasStorage && prefix) {
+      localStorage.setItem(`${prefix}identityPrivateKey`, this.bytesToBase64(this.identityPrivateKey));
+      localStorage.setItem(`${prefix}identityPublicKey`, this.bytesToBase64(this.identityPublicKey));
+      localStorage.setItem(`${prefix}ephemeralPrivateKey`, this.bytesToBase64(this.ephemeralPrivateKey));
+      localStorage.setItem(`${prefix}ephemeralPublicKey`, this.bytesToBase64(this.ephemeralPublicKey));
+    }
+  }
+
+  async signAuth(username: string, timestamp: number): Promise<{ username: string; identity_key: string; signature: string; timestamp: string }> {
+    if (!this.identityPrivateKey || !this.identityPublicKey) {
+      throw new CryptoNotAvailableError("Identity not generated");
+    }
+    const encoder = new TextEncoder();
+    const context = new Uint8Array([
+      ...encoder.encode("SecureChat-Auth-V1:"),
+      ...encoder.encode(username),
+      ...encoder.encode(":"),
+      ...encoder.encode(timestamp.toString())
+    ]);
+    const sig = ed25519.sign(context, this.identityPrivateKey);
+    return {
+      username,
+      identity_key: this.bytesToBase64(this.identityPublicKey),
+      signature: this.bytesToBase64(sig),
+      timestamp: timestamp.toString()
+    };
+  }
+
+  async getFingerprint(identityKeyB64?: string): Promise<string> {
+    let keyBytes: Uint8Array;
+    if (identityKeyB64) {
+      keyBytes = this.base64ToBytes(identityKeyB64);
+    } else if (this.identityPublicKey) {
+      keyBytes = this.identityPublicKey;
+    } else {
+      return "0000 0000 0000 0000 0000 0000";
+    }
+
+    const hashBuffer = await crypto.subtle.digest("SHA-256", keyBytes as unknown as BufferSource);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hex = hashArray.map(b => b.toString(16).padStart(2, '0').toUpperCase()).join('');
+    const groups: string[] = [];
+    for (let i = 0; i < 24; i += 4) {
+      groups.push(hex.substring(i, i + 4));
+    }
+    return groups.join(' ');
   }
 
   async getPublicKey(sender: string, target: string): Promise<string> {
@@ -225,5 +294,76 @@ export class WebCryptoProvider implements CryptoProvider {
     } catch (e) {
       throw new DecryptionError(`Failed to decrypt message`);
     }
+  }
+
+  async encryptAttachment(fileBytes: Uint8Array, fileName: string, mimeType: string) {
+    const rawKey = crypto.getRandomValues(new Uint8Array(32));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+
+    // Plaintext SHA-256
+    const hashBuffer = await crypto.subtle.digest("SHA-256", fileBytes as unknown as BufferSource);
+    const hashHex = Array.from(new Uint8Array(hashBuffer))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+
+    const cryptoKey = await crypto.subtle.importKey(
+      "raw",
+      rawKey as unknown as BufferSource,
+      { name: "AES-GCM" },
+      false,
+      ["encrypt"]
+    );
+
+    const ciphertextBuffer = await crypto.subtle.encrypt(
+      { name: "AES-GCM", iv: iv as unknown as BufferSource },
+      cryptoKey,
+      fileBytes as unknown as BufferSource
+    );
+
+    return {
+      ciphertext: new Uint8Array(ciphertextBuffer),
+      descriptor: {
+        type: "attachment" as const,
+        key: this.bytesToBase64(rawKey),
+        iv: this.bytesToBase64(iv),
+        sha256: hashHex,
+        file_name: fileName,
+        mime_type: mimeType,
+        size: fileBytes.byteLength
+      }
+    };
+  }
+
+  async decryptAttachment(ciphertext: Uint8Array, keyB64: string, ivB64: string, expectedSha256: string): Promise<Uint8Array> {
+    const rawKey = this.base64ToBytes(keyB64);
+    const iv = this.base64ToBytes(ivB64);
+
+    const cryptoKey = await crypto.subtle.importKey(
+      "raw",
+      rawKey as unknown as BufferSource,
+      { name: "AES-GCM" },
+      false,
+      ["decrypt"]
+    );
+
+    const decryptedBuffer = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: iv as unknown as BufferSource },
+      cryptoKey,
+      ciphertext as unknown as BufferSource
+    );
+
+    const decryptedBytes = new Uint8Array(decryptedBuffer);
+
+    // Verify SHA-256
+    const hashBuffer = await crypto.subtle.digest("SHA-256", decryptedBytes as unknown as BufferSource);
+    const hashHex = Array.from(new Uint8Array(hashBuffer))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+
+    if (hashHex !== expectedSha256) {
+      throw new Error("Attachment integrity check failed: SHA-256 mismatch");
+    }
+
+    return decryptedBytes;
   }
 }
