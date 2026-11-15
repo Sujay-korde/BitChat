@@ -9,7 +9,7 @@ interface ConnectionScreenProps {
 
 export function ConnectionScreen({ onConnect }: ConnectionScreenProps) {
   const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-  const defaultServerUrl = (import.meta as any).env?.VITE_WS_URL || (isLocal ? 'ws://127.0.0.1:8766' : 'wss://bitchat-server-production.up.railway.app');
+  const defaultServerUrl = (import.meta as any).env?.VITE_WS_URL || (isLocal ? 'ws://127.0.0.1:8766' : 'wss://bitchat-prod-production.up.railway.app');
   const [username, setUsername] = useState('');
   const [serverUrl, setServerUrl] = useState(defaultServerUrl);
   const { state, error } = useConnectionStore();
