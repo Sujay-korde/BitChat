@@ -10,4 +10,5 @@ export interface Transport {
   disconnect(): Promise<void>;
   sendFrame(frame: any): Promise<void>;
   recvFrame(): Promise<any>;
+  getUri?(): string;
 }

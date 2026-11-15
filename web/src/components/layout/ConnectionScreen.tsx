@@ -8,8 +8,9 @@ interface ConnectionScreenProps {
 }
 
 export function ConnectionScreen({ onConnect }: ConnectionScreenProps) {
+  const defaultServerUrl = (import.meta as any).env?.VITE_WS_URL || 'ws://127.0.0.1:8766';
   const [username, setUsername] = useState('');
-  const [serverUrl, setServerUrl] = useState('ws://127.0.0.1:8766');
+  const [serverUrl, setServerUrl] = useState(defaultServerUrl);
   const { state, error } = useConnectionStore();
 
   const isConnecting = state === ConnectionState.CONNECTING || state === ConnectionState.AUTHENTICATING;

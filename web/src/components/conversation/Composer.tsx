@@ -73,7 +73,8 @@ export function Composer({ activePeer }: ComposerProps) {
       );
 
       // Upload encrypted blob to zero-knowledge out-of-band media server
-      const uploadRes = await fetch('http://127.0.0.1:8767/api/media/upload', {
+      const baseUrl = client.getMediaBaseUrl();
+      const uploadRes = await fetch(`${baseUrl}/api/media/upload`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/octet-stream' },
         body: ciphertext as unknown as BodyInit

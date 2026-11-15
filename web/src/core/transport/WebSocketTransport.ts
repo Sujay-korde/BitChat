@@ -21,6 +21,10 @@ export class WebSocketTransport implements Transport {
     this.uri = uri;
   }
 
+  getUri(): string {
+    return this.uri;
+  }
+
   async connect(): Promise<void> {
     if (this.ws && !this.isClosed) {
       return;

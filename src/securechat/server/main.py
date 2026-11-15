@@ -78,6 +78,90 @@ class ChatServer:
             if self._prune_task:
                 self._prune_task.cancel()
 
+    async def start_cloud(self, public_port: int) -> None:
+        """Start servers with an asynchronous multiplexer on public_port (for Railway/Render)."""
+        self._prune_task = asyncio.create_task(self._prune_dead_sessions())
+        
+        internal_ws_port = 8766
+        internal_media_port = 8767
+        
+        self.media_server = MediaBlobServer(host="127.0.0.1", port=internal_media_port)
+        await self.media_server.start()
+        
+        ws_server = await websockets.serve(
+            self._handle_ws_client,
+            "127.0.0.1",
+            internal_ws_port,
+        )
+        logger.info("Internal WebSocket server listening on 127.0.0.1:%d", internal_ws_port)
+        
+        async def pipe(reader: asyncio.StreamReader, writer: asyncio.StreamWriter, initial: bytes = b"") -> None:
+            if initial:
+                writer.write(initial)
+                await writer.drain()
+            try:
+                while not reader.at_eof():
+                    chunk = await reader.read(65536)
+                    if not chunk:
+                        break
+                    writer.write(chunk)
+                    await writer.drain()
+            except Exception:
+                pass
+            finally:
+                try:
+                    writer.close()
+                except Exception:
+                    pass
+
+        async def mux_handler(client_reader: asyncio.StreamReader, client_writer: asyncio.StreamWriter) -> None:
+            try:
+                peek = await client_reader.read(4096)
+                if not peek:
+                    client_writer.close()
+                    return
+
+                # Health check endpoint for cloud platforms
+                if peek.startswith(b"GET /health") or peek.startswith(b"GET /healthz"):
+                    resp = (
+                        b"HTTP/1.1 200 OK\r\n"
+                        b"Content-Type: application/json\r\n"
+                        b"Connection: close\r\n\r\n"
+                        b'{"status":"healthy","service":"bitchat"}\n'
+                    )
+                    client_writer.write(resp)
+                    await client_writer.drain()
+                    client_writer.close()
+                    return
+
+                # Route media endpoints to media server
+                if b"/api/media" in peek or (peek.startswith(b"POST") and b"/api/" in peek):
+                    target_port = internal_media_port
+                else:
+                    target_port = internal_ws_port
+
+                t_reader, t_writer = await asyncio.open_connection("127.0.0.1", target_port)
+                asyncio.create_task(pipe(client_reader, t_writer, peek))
+                asyncio.create_task(pipe(t_reader, client_writer))
+            except Exception as e:
+                logger.error("Mux error: %s", e)
+                client_writer.close()
+
+        mux_server = await asyncio.start_server(mux_handler, "0.0.0.0", public_port)
+        logger.info("Cloud multiplexer server listening on 0.0.0.0:%d (routing to WS:%d, Media:%d)", public_port, internal_ws_port, internal_media_port)
+
+        try:
+            async with mux_server:
+                await asyncio.gather(
+                    mux_server.serve_forever(),
+                    ws_server.wait_closed(),
+                )
+        finally:
+            if self.media_server:
+                await self.media_server.stop()
+            if self._prune_task:
+                self._prune_task.cancel()
+
     async def start_ws(self) -> None:
         """Start only the WebSocket server."""
         self._prune_task = asyncio.create_task(self._prune_dead_sessions())
@@ -457,7 +541,17 @@ class ChatServer:
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-    asyncio.run(ChatServer().start_all())
+    
+    port_env = os.environ.get("PORT")
+    if port_env:
+        public_port = int(port_env)
+        logger.info("PORT environment variable detected (%d) - starting cloud multiplexer", public_port)
+        server = ChatServer()
+        asyncio.run(server.start_cloud(public_port))
+    else:
+        logger.info("Starting local standalone servers (TCP: 8765, WS: 8766, Media: 8767)")
+        server = ChatServer()
+        asyncio.run(server.start_all())
 
 if __name__ == "__main__":
     main()

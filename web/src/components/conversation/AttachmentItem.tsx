@@ -20,7 +20,8 @@ export function AttachmentItem({ descriptor }: AttachmentItemProps) {
         setLoading(true);
         setError(null);
 
-        const res = await fetch(`http://127.0.0.1:8767/api/media/${descriptor.blob_id}`);
+        const baseUrl = client.getMediaBaseUrl();
+        const res = await fetch(`${baseUrl}/api/media/${descriptor.blob_id}`);
         if (!res.ok) throw new Error(`Download failed: HTTP ${res.status}`);
         
         const ciphertextBuffer = await res.arrayBuffer();

@@ -30,6 +30,20 @@ class MediaBlobServer:
             self._server.close()
             await self._server.wait_closed()
 
+    def store_blob(self, data: bytes) -> str:
+        blob_id = str(uuid.uuid4())
+        file_path = self.storage_dir / blob_id
+        file_path.write_bytes(data)
+        return blob_id
+
+    def get_blob(self, blob_id: str) -> bytes | None:
+        if "/" in blob_id or "\\" in blob_id or ".." in blob_id:
+            return None
+        file_path = self.storage_dir / blob_id
+        if not file_path.is_file():
+            return None
+        return file_path.read_bytes()
+
     async def _handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         try:
             # Read HTTP request line

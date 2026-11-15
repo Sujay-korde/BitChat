@@ -603,4 +603,15 @@ export class SecureChatClient {
     }
     return "N/A";
   }
+
+  getMediaBaseUrl(): string {
+    if (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_MEDIA_URL) {
+      return (import.meta as any).env.VITE_MEDIA_URL;
+    }
+    const wsUri = this.transport.getUri ? this.transport.getUri() : "ws://127.0.0.1:8766";
+    if (wsUri.includes("127.0.0.1") || wsUri.includes("localhost")) {
+      return "http://127.0.0.1:8767";
+    }
+    return wsUri.replace(/^wss:\/\//i, "https://").replace(/^ws:\/\//i, "http://").replace(/\/$/, "");
+  }
 }
