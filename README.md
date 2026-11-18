@@ -2,9 +2,9 @@
 
 # ⚡ BitChat
 
-**Zero-Knowledge • Phone-Numberless • Fail-Closed End-to-End Encrypted Communication Platform**
+**Next-Generation Sovereign Cryptographic Communication Platform**
 
-*Discord's sleek aesthetics meets Signal's cryptographic guarantees.*
+*High-Performance Real-Time Messaging • Autonomous Cryptographic Identity • Zero-Knowledge Core*
 
 [![Tests](https://img.shields.io/badge/tests-45%20backend%20%7C%2024%20web%20passed-23a55a?style=for-the-badge&logo=pytest)](https://github.com/Sujay-korde/BitChat)
 [![License: MIT](https://img.shields.io/badge/License-MIT-5865f2.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
@@ -13,11 +13,11 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0%2B-3178c6.svg?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 
 <p align="center">
+  <a href="#-philosophy">Philosophy</a> •
   <a href="#-features">Features</a> •
-  <a href="#-architecture--cryptography">Architecture</a> •
+  <a href="#-protocol-specification">Protocol</a> •
+  <a href="#-architectural-overview">Architecture</a> •
   <a href="#-quick-start">Quick Start</a> •
-  <a href="#-comparison">Comparison</a> •
-  <a href="#-deploy">Deployment</a> •
   <a href="#-security-guarantees">Security Guarantees</a>
 </p>
 
@@ -25,214 +25,217 @@
 
 ---
 
-## 🌟 Overview
+## 🧭 Philosophy
 
-Most modern messaging applications force users to sacrifice privacy for convenience. They require phone numbers for KYC/identity tracking, store conversation metadata on centralized servers, or implement proprietary encryption backdoors.
+Traditional messaging networks were designed around a surveillance premise: tethering identity to state-issued telecom phone numbers, aggregating metadata on centralized servers, and operating opaque cloud databases.
 
-**BitChat** is built on a single, uncompromising principle: **Zero Server Trust**.
-Identity is strictly a client-side cryptographic key pair. The server acts exclusively as an untrusted message router and blind binary blob relay. Plaintext messages, group ratchets, and media encryption keys never touch the network unencrypted.
+**BitChat** was engineered from first principles to challenge this status quo. We believe that private communication is an inviolable digital human right. 
+
+In BitChat:
+1. **Identity is Cryptographic Sovereignty:** No phone numbers, no emails, no SMS verification. Your identity is an autonomous Ed25519 cryptographic key pair generated exclusively on your local device.
+2. **Zero-Trust Network Fabric:** The server is treated as an actively untrusted relay. It forwards blind binary frames and hosts encrypted blobs without ever possessing the keys to decrypt content, metadata mappings, or group ratchets.
+3. **Fail-Closed by Design:** If an encryption handshake is pending or compromised, communication halts safely rather than degrading to unencrypted fallback.
 
 ---
 
 ## ✨ Features
 
-- 🔑 **No Phone Numbers or Emails:** Generate an Ed25519 identity key client-side in milliseconds. No KYC, no phone verification, no email correlation.
-- 🔒 **Pairwise Direct Messaging (E2EE):** X25519 Diffie-Hellman ephemeral key exchange with HKDF-SHA256 key derivation and AES-256-GCM authenticated encryption.
-- 👥 **Group Channels (Megolm Sender-Key Protocol):** Efficient multi-party encryption with forward secrecy and ratchet trees. Rooms fan-out without server message inspection.
-- 📎 **Out-of-Band Encrypted Media Store:** Images, audio, videos, and files are encrypted client-side with unique AES-256-GCM keys and uploaded as opaque binary blobs to `/api/media`. Only recipients holding the encrypted descriptor can decrypt and view attachments.
-- 🎨 **Discord-Style Modern Dark UI:** Sleek slate aesthetic (`#313338`), channels (`#`), direct messages (`@`), message timelines, real-time presence indicators, and offline history persistence.
-- 🛡️ **Anti-Impersonation & Anti-Replay:** Per-message monotonic sequence counters and strict Associated Authenticated Data (AAD) binding sender, target, type, and key version.
-- 💾 **Persistent Client-Side Storage:** Chats and cryptographic state persist locally under client-isolated storage across sessions and reloads.
-- ⚡ **Ultra-Low Latency:** Asynchronous non-blocking architecture powered by Python `asyncio`, WebSockets, and WebCrypto API.
+- 🔑 **Autonomous Identity:** Instant client-side key generation with zero personal data collection. No phone number or account approval required.
+- 🔒 **Pairwise Direct Encryption:** X25519 Elliptic-Curve Diffie-Hellman ephemeral key exchange paired with HKDF-SHA256 key derivation and AES-256-GCM authenticated encryption.
+- 👥 **Megolm Multi-Party Group Ratchet:** High-efficiency sender-key group cryptography with ratchet forward secrecy, enabling scalable rooms without server-side plaintext exposure.
+- 🛡️ **Anti-Replay & Tamper Proofing:** Strictly monotonic sequence counters and comprehensive Authenticated Additional Data (AAD) binding message headers, sender, target, and protocol version.
+- 📎 **Blind Blob Media Vault:** Media, documents, and attachments are encrypted client-side with ephemeral AES-256 keys. The server hosts only ciphertext blobs at `/api/media`; decryption keys are exchanged exclusively via E2EE payloads.
+- 🎨 **Obsidian Slate Interface:** High-contrast, minimalist dark workspace engineered for technical precision, persistent conversation streams, and real-time cryptographic status telemetry.
+- 💾 **Decentralized Local Persistence:** Decrypted message history and cryptographic ratchet state persist strictly on the client device across sessions and reloads.
+- ⚡ **High-Throughput Asynchronous Core:** Built on Python's non-blocking `asyncio` networking engine and native browser WebCrypto API for sub-millisecond encryption and delivery.
 
 ---
 
-## 📊 Comparison
+## 🏛️ Architectural Comparison
 
-| Feature | **BitChat** | **Discord** | **WhatsApp** | **Telegram** | **Signal** |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| **No Phone Number Required** | ✅ **Yes** | ❌ No (SMS verify) | ❌ No | ❌ No | ❌ No |
-| **Zero-Knowledge Architecture** | ✅ **Yes** | ❌ No | ❌ No | ❌ No | ⚠️ Partial |
-| **Group E2EE Encryption** | ✅ **Megolm Ratchet** | ❌ None | ✅ Yes | ❌ No (Secret chat only) | ✅ Yes |
-| **Out-of-Band Media Encryption** | ✅ **Client AES-GCM** | ❌ Plain CDN | ⚠️ Cloud relay | ❌ Plain Cloud | ✅ Yes |
-| **Anti-Replay Protection (AAD)** | ✅ **Enforced** | ❌ No | ✅ Yes | ⚠️ Partial | ✅ Yes |
-| **Self-Hostable (1-Click Docker)** | ✅ **Yes** | ❌ No | ❌ No | ❌ No | ⚠️ Complex |
-| **Open Source** | ✅ **MIT** | ❌ Proprietary | ❌ Proprietary | ⚠️ Client only | ✅ GPLv3 |
+| Dimension | **Legacy Centralized Networks** | **BitChat Sovereign Protocol** |
+| :--- | :--- | :--- |
+| **Identity Anchoring** | Telecom cellular numbers & email correlation | Autonomous Ed25519 public key cryptography |
+| **Server Trust Level** | Full Trust (Server reads metadata, routing, contacts) | Zero Trust (Untrusted blind relay) |
+| **Direct Message Security** | Proprietary or centralized key escrow | X25519 ECDH + AES-256-GCM authenticated sessions |
+| **Multi-Party Channels** | Unencrypted server-side databases | Decentralized Megolm Sender-Key Ratchets |
+| **Media Attachments** | Plaintext cloud storage buckets | Client-side encrypted blobs with out-of-band key transfer |
+| **Replay & Injection Defense** | Server timestamps | Client-verified Monotonic 64-bit Sequence + AAD |
+| **Deployment Model** | Walled garden proprietary silo | 100% Open Source (MIT), self-hostable in 1 click |
 
 ---
 
-## 🏗️ Architecture & Cryptography
+## 🔬 Protocol Specification & Cryptography
 
 ```mermaid
-flowchart TD
-    subgraph ClientA["Client A (Browser / App)"]
-        IdA["Ed25519 Identity Key"]
-        EphA["X25519 Ephemeral Key"]
-        StorageA[("Local Storage\nEncrypted State")]
-    end
+sequenceDiagram
+    autonumber
+    actor Alice as Alice (Client A)
+    participant Relay as BitChat Relay Server
+    actor Bob as Bob (Client B)
 
-    subgraph Server["BitChat Relay Server (Untrusted)"]
-        Router["Asyncio Message Router"]
-        WS["WebSocket Multiplexer (:PORT)"]
-        MediaStore["Encrypted Media Blob Store (/api/media)"]
-        RoomMgr["Room & Presence Manager"]
-    end
+    Note over Alice,Bob: Autonomous Key Generation (Ed25519 + X25519)
+    Alice->>Relay: AUTH (Ed25519 Signature + Timestamp)
+    Relay-->>Alice: AUTH_OK (Session Established)
+    Bob->>Relay: AUTH (Ed25519 Signature + Timestamp)
+    Relay-->>Bob: AUTH_OK (Session Established)
 
-    subgraph ClientB["Client B (Browser / App)"]
-        IdB["Ed25519 Identity Key"]
-        EphB["X25519 Ephemeral Key"]
-        StorageB[("Local Storage\nEncrypted State")]
-    end
+    Note over Alice,Bob: Transparent Ephemeral Key Exchange
+    Alice->>Relay: KEY_EXCHANGE (Alice X25519 Public Key)
+    Relay->>Bob: Blind Relay to Bob
+    Bob->>Relay: KEY_EXCHANGE (Bob X25519 Public Key)
+    Relay->>Alice: Blind Relay to Alice
 
-    ClientA -->|"1. Authenticate with Ed25519 Signature"| WS
-    ClientB -->|"1. Authenticate with Ed25519 Signature"| WS
-    ClientA <-->|"2. X25519 Key Exchange (Pairwise DH)"| ClientB
-    ClientA -->|"3. AES-256-GCM Ciphertext + AAD"| Router
-    Router -->|"4. Blind Relay (No Plaintext Access)"| ClientB
-    ClientA -.->|"5. Upload Encrypted Media Blob"| MediaStore
-    ClientB -.->|"6. Download & Decrypt Blob Locally"| MediaStore
+    Note over Alice,Bob: Derivation: Shared Key = HKDF-SHA256(ECDH(Alice, Bob))
+    Alice->>Relay: MSG (AES-256-GCM Ciphertext + AAD Sequence Counter)
+    Relay->>Bob: Blind Deliver MSG
+    Bob->>Bob: Decrypt & Verify AAD (Replay Protected)
 ```
 
-### Cryptographic Primitives
+### Cryptographic Foundation
 
-- **Digital Signatures:** Ed25519 for non-repudiable server authentication and identity verification.
-- **Key Agreement:** X25519 Elliptic-Curve Diffie-Hellman (ECDH).
-- **Key Derivation:** HKDF-SHA256 with distinct salt and application-info strings.
-- **Symmetric Cipher:** AES-256-GCM with 96-bit random IVs and 128-bit authentication tags.
-- **Authenticated Additional Data (AAD):**
+- **Digital Signature Scheme:** Ed25519 for non-repudiable entity authentication and anti-impersonation.
+- **Key Agreement:** X25519 Elliptic-Curve Diffie-Hellman (ECDH) over Curve25519.
+- **Key Derivation Function:** HKDF-SHA256 with distinct contextual salt and info domains.
+- **Authenticated Encryption:** AES-256-GCM with unique 96-bit random IVs and 128-bit authentication tags.
+- **AEAD Authenticated Additional Data (AAD):**
   $$\text{AAD} = \text{Version} \parallel \text{MsgType} \parallel \text{TargetType} \parallel \text{Target} \parallel \text{KeyVersion} \parallel \text{Sender} \parallel \text{Sequence}$$
-  Guarantees that ciphertexts cannot be spliced, modified, redirected, or replayed.
 
 ---
 
 ## 🚀 Quick Start
 
-### Option A: Use the Live Public Cloud Deployment
+### 1. Web Application
 
-1. Open the web app: [https://bitchat-client.vercel.app](https://bitchat-client.vercel.app) *(or your Vercel deployment)*
-2. In the **SERVER** box, click **`⚡ Cloud (Railway)`** (`wss://bitchat-prod-production.up.railway.app`).
-3. Pick any handle and start chatting securely!
+Access the production deployment directly in your browser:
+**[https://bitchat-client.vercel.app](https://bitchat-client.vercel.app)** *(or your local instance)*
+
+Select **`⚡ Cloud (Railway)`** to connect to the global relay node (`wss://bitchat-prod-production.up.railway.app`), choose an identity, and start communicating immediately.
 
 ---
 
-### Option B: Run Locally
+### 2. Local Development & Self-Hosting
 
-#### 1. Clone the repository
+#### Prerequisites
+- Python 3.11 or higher
+- Node.js 18+ and npm
+
+#### A. Start the Backend Relay Server
 ```bash
+# Clone the repository
 git clone https://github.com/Sujay-korde/BitChat.git
 cd BitChat
-```
 
-#### 2. Start the Backend Server (Python 3.11+)
-```bash
-# Set up virtual environment
+# Initialize Python virtual environment
 python -m venv .venv
 
+# Activate environment
 # On Linux/macOS:
 source .venv/bin/activate
 # On Windows:
 .venv\Scripts\activate
 
-# Install dependencies
+# Install dependencies and development tools
 pip install -e .[dev]
 
 # Start standalone server (TCP: 8765, WS: 8766, Media: 8767)
 python -m securechat.server.main
 ```
 
-#### 3. Start the Web Client
-In a separate terminal:
+#### B. Start the Web Client
+In a second terminal window:
 ```bash
 cd web
 npm install
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173) in your browser. Choose **`💻 Localhost (127.0.0.1)`** and enter your identity.
+Navigate to [http://localhost:5173](http://localhost:5173), choose **`💻 Localhost (127.0.0.1)`**, and begin testing.
 
 ---
 
-## 🧪 Testing & Verification
+## 🧪 Comprehensive Verification Suite
 
-BitChat is covered by an exhaustive test suite verifying cross-runtime cryptographic interoperability between Python and Browser WebSockets/WebCrypto:
+BitChat maintains rigorous automated test coverage across protocol framing, cryptographic resilience, anti-replay defenses, and cross-runtime interoperability between Python and Browser WebCrypto:
 
 ```bash
-# Run backend cryptographic & resilience test suite (45 tests)
+# Run backend cryptographic & protocol test suite (45 tests)
 pytest tests -v
 
-# Run web client & architecture tests (24 tests)
+# Run web client architecture & persistence suite (24 tests)
 cd web
 npm test
 ```
 
-Test coverage includes:
-- [x] End-to-end messaging and Megolm group key ratchets
-- [x] Python $\longleftrightarrow$ Browser WebCrypto cross-decryption
-- [x] Malicious replay and out-of-order sequence rejection
-- [x] Identity impersonation and unauthorized key distribution prevention
-- [x] Out-of-band attachment encryption & integrity verification
-- [x] Clean architecture constraint validation (UI isolation from crypto primitives)
+Verification Highlights:
+- [x] Cross-runtime encryption interoperability (Python $\longleftrightarrow$ Browser WebCrypto)
+- [x] Megolm sender-key group ratcheting and forward secrecy
+- [x] Out-of-order packet and sequence replay rejection
+- [x] Impersonation attack defenses and key verification
+- [x] Zero-knowledge encrypted media upload, storage, and decryption integrity
+- [x] Clean architecture boundaries preventing cryptographic leakages to UI layers
 
 ---
 
-## 🐳 Docker Deployment
+## 🐳 Containerized Deployment
 
-Run the single-container cloud multiplexer (WebSockets, REST Media API, and Health Check on a unified port):
+Deploy a single-container instance with unified WebSocket and REST API multiplexing:
 
 ```bash
-# Build the Docker image
-docker build -t bitchat-server .
+# Build container image
+docker build -t bitchat-node .
 
-# Run container
-docker run -p 8080:8080 -e PORT=8080 bitchat-server
+# Run container on unified port
+docker run -p 8080:8080 -e PORT=8080 bitchat-node
 ```
 
 ---
 
-## 🔒 Security Model & Threat Analysis
+## 🛡️ Threat Analysis & Defense Strategy
 
-| Threat | Mitigation Strategy |
+| Threat Vector | Mitigation Strategy |
 | :--- | :--- |
-| **Server Compromise / Rogue Admin** | Fail-closed E2EE. All keys exist solely in client memory/storage. The server cannot read plaintext or forge messages. |
-| **Man-in-the-Middle (MITM)** | Public keys are signed using Ed25519 identity keys and compared using visual fingerprints. |
-| **Replay Attacks** | Strictly monotonic 64-bit sequence counters verified inside AES-GCM Authenticated Additional Data (AAD). |
-| **Metadata Mining** | No phone numbers, real names, contacts, or location data collected or stored. |
-| **Media Interception** | Out-of-band media blobs are encrypted with ephemeral AES-256 keys prior to HTTP upload. Decryption keys are transferred exclusively within E2EE payloads. |
+| **Compromised Host / Malicious Server** | Cryptographic zero-trust. Keys reside exclusively in client memory/isolated storage. Plaintext is unreachable by the server. |
+| **Adversarial Man-in-the-Middle** | Ephemeral public keys are signed with Ed25519 identity keys and verified against visual cryptographic fingerprints. |
+| **Packet Replay Attacks** | Strictly monotonic 64-bit sequence counters evaluated inside authenticated AAD. Replays are dropped immediately. |
+| **Identity Correlation & Tracking** | Zero metadata collection. No cellular numbers, legal names, IP persistence, or social graph mining. |
+| **Attachment Interception** | Out-of-band files are encrypted with unique AES-256 keys prior to transmission; keys are only shared within E2EE payloads. |
 
 ---
 
-## 🛣️ Roadmap
+## 🛣️ Project Trajectory
 
-- [x] Complete Ed25519 authentication and anti-impersonation
+- [x] Ed25519 autonomous identity generation & anti-impersonation
+- [x] Pairwise X25519 Diffie-Hellman + AES-256-GCM sessions
 - [x] Megolm-style sender-key group encryption
-- [x] Zero-knowledge encrypted media store
-- [x] Modern Discord-style dark interface
-- [x] LocalStorage conversation & contact persistence
-- [ ] Multi-device cryptographic session syncing
-- [ ] End-to-end encrypted WebRTC audio & video calls
-- [ ] Native mobile apps (Tauri / React Native)
-- [ ] Tor / Onion routing integration for metadata obfuscation
+- [x] Out-of-band encrypted media storage
+- [x] Obsidian slate dark user interface
+- [x] Client-side persistent conversation storage
+- [ ] Ephemeral disappearing message timers
+- [ ] End-to-end encrypted WebRTC audio & video streams
+- [ ] Cross-platform desktop binaries (Tauri / Rust)
+- [ ] Onion / mixnet routing integration for IP-level anonymity
 
 ---
 
-## 🤝 Contributing
+## 🤝 Community & Contributions
 
-Contributions make the open-source community an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
+We welcome security researchers, cryptographers, and software engineers to contribute to BitChat.
 
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/crypto-enhancement`)
+3. Commit your changes (`git commit -m 'feat: implement post-quantum ratchet'`)
+4. Push to your branch (`git push origin feature/crypto-enhancement`)
 5. Open a Pull Request
 
 ---
 
 ## 📄 License
 
-Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for more information.
+This project is licensed under the **MIT License**. See the [`LICENSE`](LICENSE) file for details.
 
 ---
 
 <div align="center">
-  <sub>Built with ❤️ for privacy and sovereignty by <a href="https://github.com/Sujay-korde">Sujay Korde</a>. If you find this project valuable, please consider giving it a ⭐!</sub>
+  <sub>Architected for digital autonomy and personal sovereignty by <a href="https://github.com/Sujay-korde">Sujay Korde</a>. If you stand for private communication, star the repository! ⭐</sub>
 </div>

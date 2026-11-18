@@ -196,7 +196,7 @@ export function NavigationPanel() {
   );
 
   return (
-    <nav className={styles.nav} aria-label="Main Discord-Style Navigation">
+    <nav className={styles.nav} aria-label="Main Navigation">
       {/* Brand Header */}
       <header className={styles.header}>
         <div className={styles.brand}>
@@ -400,7 +400,7 @@ export function NavigationPanel() {
         )}
       </div>
 
-      {/* Discord User Profile Panel (Bottom) */}
+      {/* User Profile Panel (Bottom) */}
       <footer className={styles.userPanel}>
         <div className={styles.userCard}>
           <div className={styles.userAvatar}>

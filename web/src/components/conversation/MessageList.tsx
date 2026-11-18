@@ -164,7 +164,7 @@ export function MessageList({ activePeer }: MessageListProps) {
                 </div>
               )}
 
-              {/* Discord-style Message Row */}
+              {/* Message Row */}
               <div
                 style={{
                   display: 'flex',
