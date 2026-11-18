@@ -108,29 +108,36 @@ export function Composer({ activePeer }: ComposerProps) {
     }
   };
 
+  const isRoom = rooms.includes(activePeer);
+  const placeholderText = uploading 
+    ? "Encrypting & uploading attachment..." 
+    : (disabled ? "Connecting..." : `Message ${isRoom ? '#' : '@'}${activePeer}`);
+
   return (
     <div style={{
       display: 'flex',
       alignItems: 'center',
-      padding: '10px 16px',
-      backgroundColor: '#f0f2f5',
+      padding: '4px 12px',
+      backgroundColor: '#383a40',
+      borderRadius: '8px',
       gap: '8px',
-      position: 'relative'
+      position: 'relative',
+      minHeight: '44px',
     }}>
       {showEmojis && (
         <div ref={emojiRef} style={{
           position: 'absolute',
           bottom: '100%',
-          left: '16px',
-          marginBottom: '8px',
-          backgroundColor: '#fff',
-          border: '1px solid #e1e1e1',
+          left: '0',
+          marginBottom: '10px',
+          backgroundColor: '#2b2d31',
+          border: '1px solid #1f2023',
           borderRadius: '8px',
-          padding: '8px',
+          padding: '10px',
           display: 'grid',
           gridTemplateColumns: 'repeat(5, 1fr)',
           gap: '8px',
-          boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
+          boxShadow: '0 8px 16px rgba(0,0,0,0.4)',
           zIndex: 10
         }}>
           {COMMON_EMOJIS.map(emoji => (
@@ -142,8 +149,12 @@ export function Composer({ activePeer }: ComposerProps) {
                 border: 'none',
                 fontSize: '20px',
                 cursor: 'pointer',
-                padding: '4px'
+                padding: '4px',
+                borderRadius: '4px',
+                transition: 'background-color 0.1s ease',
               }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#35373c')}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
             >
               {emoji}
             </button>
@@ -151,23 +162,6 @@ export function Composer({ activePeer }: ComposerProps) {
         </div>
       )}
       
-      <button 
-        onClick={() => setShowEmojis(!showEmojis)}
-        disabled={disabled}
-        title="Emoji"
-        style={{
-          background: 'none',
-          border: 'none',
-          fontSize: '24px',
-          cursor: disabled ? 'default' : 'pointer',
-          color: '#54656f',
-          padding: '4px',
-          opacity: disabled ? 0.6 : 1
-        }}
-      >
-        😀
-      </button>
-
       {/* Hidden file input */}
       <input
         type="file"
@@ -177,49 +171,51 @@ export function Composer({ activePeer }: ComposerProps) {
         disabled={disabled}
       />
 
+      {/* Attachment Button */}
       <button
         onClick={() => fileInputRef.current?.click()}
         disabled={disabled}
         title="Attach file (End-to-end encrypted)"
         style={{
-          background: 'none',
+          width: '28px',
+          height: '28px',
+          borderRadius: '50%',
+          background: uploading ? '#5865f2' : '#4e5058',
           border: 'none',
-          fontSize: '22px',
+          color: '#ffffff',
+          fontSize: '16px',
           cursor: disabled ? 'default' : 'pointer',
-          color: uploading ? '#00a884' : '#54656f',
-          padding: '4px',
-          opacity: disabled ? 0.6 : 1,
           display: 'flex',
-          alignItems: 'center'
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+          opacity: disabled ? 0.6 : 1,
+          transition: 'background-color 0.15s ease',
         }}
+        onMouseEnter={(e) => { if (!uploading) e.currentTarget.style.backgroundColor = '#5d6069'; }}
+        onMouseLeave={(e) => { if (!uploading) e.currentTarget.style.backgroundColor = '#4e5058'; }}
       >
-        📎
+        +
       </button>
 
-      <div style={{
-        flex: 1,
-        backgroundColor: '#fff',
-        borderRadius: '8px',
-        padding: '9px 12px',
-        display: 'flex',
-        alignItems: 'center'
-      }}>
+      {/* Input Field */}
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
         <textarea
           style={{
             width: '100%',
             background: 'transparent',
             border: 'none',
-            color: '#111b21',
+            color: '#f2f3f5',
             resize: 'none',
             outline: 'none',
             fontFamily: 'inherit',
             fontSize: '15px',
-            padding: '0',
-            minHeight: '20px',
-            maxHeight: '100px',
-            lineHeight: '20px'
+            padding: '4px 0',
+            minHeight: '22px',
+            maxHeight: '120px',
+            lineHeight: '22px'
           }}
-          placeholder={uploading ? "Encrypting & uploading attachment..." : (disabled ? "Connecting..." : "Type a message")}
+          placeholder={placeholderText}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -227,22 +223,46 @@ export function Composer({ activePeer }: ComposerProps) {
           rows={1}
         />
       </div>
-      
+
+      {/* Emoji Button */}
       <button 
-        onClick={handleSend}
-        disabled={disabled || !text.trim()}
+        onClick={() => setShowEmojis(!showEmojis)}
+        disabled={disabled}
+        title="Select Emoji"
         style={{
           background: 'none',
           border: 'none',
-          cursor: (disabled || !text.trim()) ? 'default' : 'pointer',
-          color: (disabled || !text.trim()) ? '#aebac1' : '#00a884',
-          padding: '8px',
+          fontSize: '20px',
+          cursor: disabled ? 'default' : 'pointer',
+          color: '#b5bac1',
+          padding: '4px',
+          opacity: disabled ? 0.6 : 1,
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center'
         }}
       >
-        <svg viewBox="0 0 24 24" height="24" width="24" preserveAspectRatio="xMidYMid meet" fill="currentColor">
+        😀
+      </button>
+
+      {/* Send Button */}
+      <button 
+        onClick={handleSend}
+        disabled={disabled || !text.trim()}
+        title="Send Message"
+        style={{
+          background: (disabled || !text.trim()) ? 'transparent' : '#5865f2',
+          border: 'none',
+          borderRadius: '6px',
+          cursor: (disabled || !text.trim()) ? 'default' : 'pointer',
+          color: (disabled || !text.trim()) ? '#80848e' : '#ffffff',
+          padding: '6px 10px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          transition: 'background-color 0.15s ease',
+        }}
+      >
+        <svg viewBox="0 0 24 24" height="18" width="18" preserveAspectRatio="xMidYMid meet" fill="currentColor">
           <path d="M1.101,21.757L23.8,12.028L1.101,2.3l0.011,7.912l13.623,1.816L1.112,13.845L1.101,21.757z"></path>
         </svg>
       </button>

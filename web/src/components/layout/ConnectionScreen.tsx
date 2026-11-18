@@ -64,18 +64,20 @@ export function ConnectionScreen({ onConnect }: ConnectionScreenProps) {
               className={styles.input}
               disabled={isConnecting}
             />
-            <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+            <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
               <button
                 type="button"
                 onClick={() => setServerUrl(CLOUD_WS_URL)}
                 style={{
                   fontSize: '11px',
-                  padding: '3px 8px',
+                  fontWeight: 500,
+                  padding: '4px 10px',
                   borderRadius: '4px',
-                  border: '1px solid var(--color-border)',
-                  background: serverUrl === CLOUD_WS_URL ? 'var(--color-bg-surface-active, #e9edef)' : 'transparent',
-                  color: 'var(--color-text-secondary)',
-                  cursor: 'pointer'
+                  border: serverUrl === CLOUD_WS_URL ? '1px solid #5865f2' : '1px solid var(--color-border)',
+                  background: serverUrl === CLOUD_WS_URL ? 'rgba(88, 101, 242, 0.2)' : 'var(--color-bg-surface-secondary)',
+                  color: serverUrl === CLOUD_WS_URL ? '#ffffff' : 'var(--color-text-muted)',
+                  cursor: 'pointer',
+                  transition: 'all 0.12s ease'
                 }}
               >
                 ⚡ Cloud (Railway)
@@ -85,12 +87,14 @@ export function ConnectionScreen({ onConnect }: ConnectionScreenProps) {
                 onClick={() => setServerUrl(LOCAL_WS_URL)}
                 style={{
                   fontSize: '11px',
-                  padding: '3px 8px',
+                  fontWeight: 500,
+                  padding: '4px 10px',
                   borderRadius: '4px',
-                  border: '1px solid var(--color-border)',
-                  background: serverUrl === LOCAL_WS_URL ? 'var(--color-bg-surface-active, #e9edef)' : 'transparent',
-                  color: 'var(--color-text-secondary)',
-                  cursor: 'pointer'
+                  border: serverUrl === LOCAL_WS_URL ? '1px solid #5865f2' : '1px solid var(--color-border)',
+                  background: serverUrl === LOCAL_WS_URL ? 'rgba(88, 101, 242, 0.2)' : 'var(--color-bg-surface-secondary)',
+                  color: serverUrl === LOCAL_WS_URL ? '#ffffff' : 'var(--color-text-muted)',
+                  cursor: 'pointer',
+                  transition: 'all 0.12s ease'
                 }}
               >
                 💻 Localhost (127.0.0.1)

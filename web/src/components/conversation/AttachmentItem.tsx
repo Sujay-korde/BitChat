@@ -64,15 +64,25 @@ export function AttachmentItem({ descriptor }: AttachmentItemProps) {
   const isAudio = descriptor.mime_type.startsWith("audio/");
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '8px',
+      backgroundColor: '#2b2d31',
+      border: '1px solid #1f2023',
+      borderRadius: '8px',
+      padding: '10px 12px',
+      maxWidth: '520px',
+      marginTop: '4px'
+    }}>
       {loading && (
-        <div style={{ fontSize: '12px', color: '#667781', display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <div style={{ fontSize: '12px', color: '#949ba4', display: 'flex', alignItems: 'center', gap: '6px' }}>
           <span>🔒 Decrypting end-to-end media...</span>
         </div>
       )}
 
       {error && (
-        <div style={{ fontSize: '12px', color: '#d32f2f' }}>
+        <div style={{ fontSize: '12px', color: '#f23f43' }}>
           ⚠️ {error}
         </div>
       )}
@@ -83,7 +93,7 @@ export function AttachmentItem({ descriptor }: AttachmentItemProps) {
             <img 
               src={mediaUrl} 
               alt={descriptor.file_name} 
-              style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '6px', objectFit: 'contain' }} 
+              style={{ maxWidth: '100%', maxHeight: '340px', borderRadius: '6px', objectFit: 'contain' }} 
             />
           )}
 
@@ -91,7 +101,7 @@ export function AttachmentItem({ descriptor }: AttachmentItemProps) {
             <video 
               src={mediaUrl} 
               controls 
-              style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '6px' }} 
+              style={{ maxWidth: '100%', maxHeight: '340px', borderRadius: '6px' }} 
             />
           )}
 
@@ -104,21 +114,24 @@ export function AttachmentItem({ descriptor }: AttachmentItemProps) {
           )}
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', paddingTop: '4px' }}>
-            <span style={{ fontSize: '12px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              📁 {descriptor.file_name} ({formatSize(descriptor.size)})
+            <span style={{ fontSize: '13px', color: '#f2f3f5', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              📁 {descriptor.file_name} <span style={{ color: '#949ba4', fontSize: '11.5px' }}>({formatSize(descriptor.size)})</span>
             </span>
             <a 
               href={mediaUrl} 
               download={descriptor.file_name}
               style={{ 
                 fontSize: '12px', 
-                color: '#00a884', 
+                color: '#ffffff', 
                 textDecoration: 'none', 
                 fontWeight: 600,
-                padding: '2px 8px',
-                backgroundColor: 'rgba(0,168,132,0.1)',
-                borderRadius: '4px'
+                padding: '4px 10px',
+                backgroundColor: '#5865f2',
+                borderRadius: '4px',
+                transition: 'background-color 0.15s ease',
               }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#4752c4')}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#5865f2')}
             >
               Download
             </a>
@@ -127,7 +140,7 @@ export function AttachmentItem({ descriptor }: AttachmentItemProps) {
       )}
 
       {descriptor.caption && (
-        <div style={{ fontSize: '14px', marginTop: '4px' }}>
+        <div style={{ fontSize: '14px', color: '#dbdee1', marginTop: '2px' }}>
           {descriptor.caption}
         </div>
       )}

@@ -16,14 +16,20 @@ interface ConversationItem {
   isOnline: boolean;
 }
 
-function getAvatarColor(str: string): string {
+function getAvatarGradient(str: string): string {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     hash = str.charCodeAt(i) + ((hash << 5) - hash);
   }
-  const hues = [160, 190, 210, 270, 320, 25, 45];
-  const h = hues[Math.abs(hash) % hues.length];
-  return `hsl(${h}, 65%, 42%)`;
+  const gradients = [
+    'linear-gradient(135deg, #5865f2, #4752c4)',
+    'linear-gradient(135deg, #23a55a, #1a8346)',
+    'linear-gradient(135deg, #f23f43, #c23135)',
+    'linear-gradient(135deg, #f0b232, #c89326)',
+    'linear-gradient(135deg, #eb459e, #b8337a)',
+    'linear-gradient(135deg, #00a8fc, #0082c4)',
+  ];
+  return gradients[Math.abs(hash) % gradients.length];
 }
 
 function formatRelativeTimestamp(ts?: number): string {
@@ -49,7 +55,6 @@ function formatRelativeTimestamp(ts?: number): string {
   return d.toLocaleDateString(undefined, {
     month: 'numeric',
     day: 'numeric',
-    year: d.getFullYear() !== now.getFullYear() ? '2-digit' : undefined,
   });
 }
 
@@ -70,7 +75,7 @@ export function NavigationPanel() {
   const { username } = useConnectionStore();
   const { messages, rooms, activePeer, setActivePeer, joinRoom, presence } = useConversationStore();
 
-  const [activeTab, setActiveTab] = useState<'all' | 'chats' | 'groups'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'channels' | 'dms'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [drawerType, setDrawerType] = useState<'dm' | 'group' | null>(null);
   const [inputVal, setInputVal] = useState('');
@@ -80,7 +85,7 @@ export function NavigationPanel() {
     const list: ConversationItem[] = [];
     const seen = new Set<string>();
 
-    // 1. Process joined rooms
+    // 1. Process joined rooms (Channels)
     for (const room of rooms) {
       seen.add(room);
       const roomMsgs = messages[room] || [];
@@ -135,26 +140,34 @@ export function NavigationPanel() {
       });
     }
 
-    // Sort descending by most recent activity timestamp
-    return list.sort((a, b) => b.lastMessageTime - a.lastMessageTime);
+    return list;
   }, [messages, rooms, activePeer, presence]);
 
-  // Filtered by tab and search query
-  const filteredList = useMemo(() => {
-    return conversationList.filter((item) => {
-      // Tab filter
-      if (activeTab === 'chats' && item.isRoom) return false;
-      if (activeTab === 'groups' && !item.isRoom) return false;
+  // Separate into channels and DMs
+  const channels = useMemo(() => {
+    return conversationList
+      .filter(item => item.isRoom)
+      .sort((a, b) => b.lastMessageTime - a.lastMessageTime);
+  }, [conversationList]);
 
-      // Search filter
-      if (!searchQuery.trim()) return true;
-      const q = searchQuery.toLowerCase();
-      return (
-        item.title.toLowerCase().includes(q) ||
-        item.lastMessageText.toLowerCase().includes(q)
-      );
-    });
-  }, [conversationList, activeTab, searchQuery]);
+  const dms = useMemo(() => {
+    return conversationList
+      .filter(item => !item.isRoom)
+      .sort((a, b) => b.lastMessageTime - a.lastMessageTime);
+  }, [conversationList]);
+
+  // Search filtering
+  const filterItem = (item: ConversationItem) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      item.title.toLowerCase().includes(q) ||
+      item.lastMessageText.toLowerCase().includes(q)
+    );
+  };
+
+  const filteredChannels = channels.filter(filterItem);
+  const filteredDms = dms.filter(filterItem);
 
   const handleStartChat = (targetId: string, isGroup: boolean) => {
     const trimmed = targetId.trim();
@@ -183,70 +196,62 @@ export function NavigationPanel() {
   );
 
   return (
-    <nav className={styles.nav} aria-label="Main WhatsApp Navigation">
-      {/* WhatsApp Header */}
+    <nav className={styles.nav} aria-label="Main Discord-Style Navigation">
+      {/* Brand Header */}
       <header className={styles.header}>
-        <div className={styles.userProfile}>
-          <div className={styles.avatar}>
-            {(username || 'U').substring(0, 2).toUpperCase()}
-          </div>
-          <div className={styles.userInfo}>
-            <span className={styles.userName}>{username || 'Unknown'}</span>
-            <span className={styles.userStatus}>
-              <span className={styles.onlineBadge} />
-              online
-            </span>
-          </div>
+        <div className={styles.brand}>
+          <div className={styles.brandLogo}>#</div>
+          <span className={styles.brandName}>BitChat</span>
         </div>
 
         <div className={styles.headerActions}>
           <button
             className={`${styles.actionButton} ${drawerType === 'dm' ? styles.actionButtonActive : ''}`}
             onClick={() => setDrawerType(drawerType === 'dm' ? null : 'dm')}
-            title="Start New Direct Chat"
+            title="Start Direct Message"
           >
-            <span>💬</span> New Chat
+            <span>+</span> Chat
           </button>
           <button
             className={`${styles.actionButton} ${drawerType === 'group' ? styles.actionButtonActive : ''}`}
             onClick={() => setDrawerType(drawerType === 'group' ? null : 'group')}
-            title="Create or Join Group"
+            title="Create or Join Channel"
           >
-            <span>👥</span> Group
+            <span>+</span> Room
           </button>
         </div>
       </header>
 
-      {/* Drawer for creating chat or group */}
+      {/* Action Drawer */}
       {drawerType && (
         <div className={styles.actionDrawer}>
           <div className={styles.drawerTitle}>
-            {drawerType === 'dm' ? 'Start New Direct Chat' : 'Create or Join Room'}
+            {drawerType === 'dm' ? 'Start Direct Message' : 'Join or Create Channel'}
           </div>
           <form className={styles.drawerForm} onSubmit={handleDrawerSubmit}>
             <input
               type="text"
               className={styles.drawerInput}
-              placeholder={drawerType === 'dm' ? 'Peer Identity (e.g. bob)' : 'Room ID (e.g. dev-team)'}
+              placeholder={drawerType === 'dm' ? 'Peer Identity (e.g. bob)' : 'Channel ID (e.g. general)'}
               value={inputVal}
               onChange={(e) => setInputVal(e.target.value)}
               autoFocus
             />
             <button type="submit" className={styles.drawerSubmit}>
-              {drawerType === 'dm' ? 'Chat' : 'Join'}
+              {drawerType === 'dm' ? 'Message' : 'Join'}
             </button>
           </form>
         </div>
       )}
 
-      {/* Search Bar & Filter Chips */}
+      {/* Find/Search Bar & Filter Tabs */}
       <div className={styles.searchContainer}>
         <div className={styles.searchBox}>
           <span className={styles.searchIcon}>🔍</span>
           <input
             type="text"
             className={styles.searchInput}
-            placeholder="Search or start new chat"
+            placeholder="Find or start a conversation"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -269,99 +274,157 @@ export function NavigationPanel() {
             All
           </button>
           <button
-            className={`${styles.filterChip} ${activeTab === 'chats' ? styles.filterChipActive : ''}`}
-            onClick={() => setActiveTab('chats')}
+            className={`${styles.filterChip} ${activeTab === 'channels' ? styles.filterChipActive : ''}`}
+            onClick={() => setActiveTab('channels')}
           >
-            Chats
+            Channels
           </button>
           <button
-            className={`${styles.filterChip} ${activeTab === 'groups' ? styles.filterChipActive : ''}`}
-            onClick={() => setActiveTab('groups')}
+            className={`${styles.filterChip} ${activeTab === 'dms' ? styles.filterChipActive : ''}`}
+            onClick={() => setActiveTab('dms')}
           >
-            Groups
+            Direct Messages
           </button>
         </div>
       </div>
 
-      {/* Quick start row when searching for an identity not yet added */}
-      {searchQuery.trim() && !exactMatchExists && (
-        <div
-          className={styles.startChatRow}
-          onClick={() => handleStartChat(searchQuery.trim(), false)}
-        >
-          <span>💬</span>
-          <span>Start new chat with &ldquo;<strong>{searchQuery.trim()}</strong>&rdquo;</span>
-        </div>
-      )}
+      {/* Scrollable Content */}
+      <div className={styles.scrollContent}>
+        {/* Quick Start Search Hit */}
+        {searchQuery.trim() && !exactMatchExists && (
+          <div
+            className={styles.startChatRow}
+            onClick={() => handleStartChat(searchQuery.trim(), false)}
+          >
+            <span>💬</span>
+            <span>Message &ldquo;<strong>{searchQuery.trim()}</strong>&rdquo;</span>
+          </div>
+        )}
 
-      {/* Unified WhatsApp Chat List */}
-      <ul className={styles.chatList}>
-        {filteredList.length === 0 ? (
-          <li className={styles.emptyState}>
-            <span>No conversations found.</span>
-            <button
-              className={styles.actionButton}
-              onClick={() => setDrawerType('dm')}
-            >
-              Start your first chat
-            </button>
-          </li>
-        ) : (
-          filteredList.map((item) => {
-            const isSelected = activePeer === item.id;
-            const isOwnLastMsg = item.lastMessageSender === username;
-            const avatarBg = item.isRoom
-              ? '#54656f'
-              : getAvatarColor(item.title);
-
-            return (
-              <li
-                key={item.id}
-                className={`${styles.chatItem} ${isSelected ? styles.chatItemActive : ''}`}
-                onClick={() => setActivePeer(item.id)}
+        {/* Channels Section */}
+        {(activeTab === 'all' || activeTab === 'channels') && (
+          <div>
+            <div className={styles.sectionHeader}>
+              <span>Text Channels</span>
+              <span
+                className={styles.sectionAddBtn}
+                onClick={() => setDrawerType('group')}
+                title="Create Channel"
               >
-                <div
-                  className={styles.itemAvatar}
-                  style={{ backgroundColor: avatarBg }}
-                >
-                  {item.isRoom ? '👥' : item.title.substring(0, 2).toUpperCase()}
-                  {!item.isRoom && item.isOnline && (
-                    <span className={styles.itemPresence} />
-                  )}
-                </div>
-
-                <div className={styles.itemDetails}>
-                  <div className={styles.itemTopRow}>
-                    <span className={styles.itemTitle}>
-                      {item.isRoom ? `#${item.title}` : item.title}
-                      {item.isRoom && <span className={styles.itemTypeTag}>group</span>}
-                    </span>
-                    <span className={styles.itemTime}>
-                      {formatRelativeTimestamp(item.lastMessageTime)}
-                    </span>
-                  </div>
-
-                  <div className={styles.itemBottomRow}>
-                    <span className={styles.itemSnippet}>
-                      {isOwnLastMsg && (
-                        <span className={styles.sentStatus}>
-                          {item.lastMessageStatus === MessageState.SENT ? '✓✓ ' : '✓ '}
+                +
+              </span>
+            </div>
+            <ul className={styles.chatList}>
+              {filteredChannels.length === 0 ? (
+                <li style={{ padding: '6px 8px', fontSize: '12px', color: '#80848e', fontStyle: 'italic' }}>
+                  No channels joined yet
+                </li>
+              ) : (
+                filteredChannels.map((item) => {
+                  const isSelected = activePeer === item.id;
+                  return (
+                    <li
+                      key={item.id}
+                      className={`${styles.channelItem} ${isSelected ? styles.channelItemActive : ''}`}
+                      onClick={() => setActivePeer(item.id)}
+                    >
+                      <span className={styles.channelHash}>#</span>
+                      <span className={styles.channelName}>{item.title}</span>
+                      {item.lastMessageTime > 0 && (
+                        <span style={{ fontSize: '10.5px', color: '#949ba4' }}>
+                          {formatRelativeTimestamp(item.lastMessageTime)}
                         </span>
                       )}
-                      {!isOwnLastMsg && item.isRoom && item.lastMessageSender && (
-                        <span><strong>{item.lastMessageSender}: </strong></span>
-                      )}
-                      <span>
-                        {item.lastMessageText || 'Tap to message'}
-                      </span>
-                    </span>
-                  </div>
-                </div>
-              </li>
-            );
-          })
+                    </li>
+                  );
+                })
+              )}
+            </ul>
+          </div>
         )}
-      </ul>
+
+        {/* Direct Messages Section */}
+        {(activeTab === 'all' || activeTab === 'dms') && (
+          <div>
+            <div className={styles.sectionHeader}>
+              <span>Direct Messages</span>
+              <span
+                className={styles.sectionAddBtn}
+                onClick={() => setDrawerType('dm')}
+                title="Start New Direct Chat"
+              >
+                +
+              </span>
+            </div>
+            <ul className={styles.chatList}>
+              {filteredDms.length === 0 ? (
+                <li style={{ padding: '6px 8px', fontSize: '12px', color: '#80848e', fontStyle: 'italic' }}>
+                  No direct messages yet
+                </li>
+              ) : (
+                filteredDms.map((item) => {
+                  const isSelected = activePeer === item.id;
+                  const isOwn = item.lastMessageSender === username;
+                  return (
+                    <li
+                      key={item.id}
+                      className={`${styles.dmItem} ${isSelected ? styles.dmItemActive : ''}`}
+                      onClick={() => setActivePeer(item.id)}
+                    >
+                      <div
+                        className={styles.dmAvatar}
+                        style={{ background: getAvatarGradient(item.title) }}
+                      >
+                        {item.title.substring(0, 2).toUpperCase()}
+                        {item.isOnline && <span className={styles.dmPresence} />}
+                      </div>
+
+                      <div className={styles.dmDetails}>
+                        <div className={styles.dmTopRow}>
+                          <span className={styles.dmName}>{item.title}</span>
+                          <span className={styles.dmTime}>
+                            {formatRelativeTimestamp(item.lastMessageTime)}
+                          </span>
+                        </div>
+                        <div className={styles.dmSnippet}>
+                          {isOwn && <span style={{ color: '#5865f2' }}>✓ </span>}
+                          <span>{item.lastMessageText || 'No messages yet'}</span>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })
+              )}
+            </ul>
+          </div>
+        )}
+      </div>
+
+      {/* Discord User Profile Panel (Bottom) */}
+      <footer className={styles.userPanel}>
+        <div className={styles.userCard}>
+          <div className={styles.userAvatar}>
+            {(username || 'U').substring(0, 2).toUpperCase()}
+            <span className={styles.userStatusDot} />
+          </div>
+          <div className={styles.userNameBlock}>
+            <span className={styles.userDisplayName}>{username || 'Guest'}</span>
+            <span className={styles.userSubtitle}>Connected • E2EE</span>
+          </div>
+        </div>
+
+        <button
+          className={styles.userControlBtn}
+          onClick={() => client.disconnect()}
+          title="Disconnect Session"
+        >
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            <polyline points="16 17 21 12 16 7"></polyline>
+            <line x1="21" y1="12" x2="9" y2="12"></line>
+          </svg>
+        </button>
+      </footer>
     </nav>
   );
 }
