@@ -7,7 +7,7 @@ import { SecureChatClient } from './core/client/SecureChatClient';
 import { WebSocketTransport } from './core/transport/WebSocketTransport';
 import { WebCryptoProvider } from './core/crypto/WebCryptoProvider';
 import { DummyModerationProvider } from './core/moderation/ModerationProvider';
-import { ConnectionState } from './core/client/events';
+import { ConnectionState, MessageState } from './core/client/events';
 import type { SecureChatEvent } from './core/client/events';
 
 // Create singleton instances for the lifetime of the app
@@ -18,13 +18,19 @@ export const client = new SecureChatClient(transport, crypto, moderation);
 
 function App() {
   const { state, setState, setUsername, setError } = useConnectionStore();
-  const { addMessage, updateMessageStatus, setPresence } = useConversationStore();
+  const { addMessage, updateMessageStatus, setPresence, setCurrentUser } = useConversationStore();
 
   useEffect(() => {
     const unsubscribe = client.onEvent((event: SecureChatEvent) => {
       switch (event.type) {
         case "ConnectionChanged":
           setState(event.state);
+          if (event.state === ConnectionState.READY) {
+            const currentUsername = useConnectionStore.getState().username;
+            if (currentUsername) {
+              setCurrentUser(currentUsername);
+            }
+          }
           break;
         case "MessageReceived": {
           const currentUsername = useConnectionStore.getState().username;
@@ -36,6 +42,7 @@ function App() {
             sender: event.sender,
             text: event.text,
             timestamp: Date.now(),
+            status: event.sender === currentUsername ? MessageState.PENDING : undefined,
           });
           break;
         }
@@ -62,6 +69,7 @@ function App() {
 
   const handleConnect = async (username: string, serverUrl: string) => {
     setUsername(username);
+    setCurrentUser(username);
     setError(null);
     try {
       transport.setUri(serverUrl);

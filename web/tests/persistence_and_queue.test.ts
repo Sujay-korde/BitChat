@@ -1,0 +1,101 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+import { useConversationStore } from '../src/state/conversationStore';
+import { MessageState } from '../src/core/client/events';
+
+describe('ConversationStore & WhatsApp Persistence', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    useConversationStore.setState({
+      messages: {},
+      presence: {},
+      rooms: [],
+      activePeer: null,
+      roomSequences: {},
+      currentUsername: null,
+    });
+  });
+
+  it('persists messages, rooms, and active peer to localStorage under username namespace', () => {
+    const store = useConversationStore.getState();
+    store.setCurrentUser('alice');
+
+    store.joinRoom('dev-team');
+    store.setActivePeer('bob');
+
+    const testMsg = {
+      id: 'msg-1',
+      sender: 'alice',
+      text: 'Hello Bob! This is persistent.',
+      timestamp: Date.now(),
+      status: MessageState.SENT,
+    };
+    store.addMessage('bob', testMsg);
+
+    // Verify localStorage contents
+    const rawMessages = localStorage.getItem('securechat_alice_messages');
+    expect(rawMessages).not.toBeNull();
+    const parsedMessages = JSON.parse(rawMessages!);
+    expect(parsedMessages['bob']).toBeDefined();
+    expect(parsedMessages['bob'][0].text).toBe('Hello Bob! This is persistent.');
+
+    const rawRooms = localStorage.getItem('securechat_alice_rooms');
+    expect(JSON.parse(rawRooms!)).toContain('dev-team');
+
+    const rawActivePeer = localStorage.getItem('securechat_alice_active_peer');
+    expect(JSON.parse(rawActivePeer!)).toBe('bob');
+  });
+
+  it('restores message history when logging in as the same user across sessions', () => {
+    // Session 1: User 'alice' chats with 'charlie'
+    useConversationStore.getState().setCurrentUser('alice');
+    useConversationStore.getState().addMessage('charlie', {
+      id: 'c-1',
+      sender: 'alice',
+      text: 'Hey Charlie, remember this tomorrow!',
+      timestamp: 1700000000000,
+    });
+    useConversationStore.getState().addMessage('charlie', {
+      id: 'c-2',
+      sender: 'charlie',
+      text: 'I will remember it.',
+      timestamp: 1700000005000,
+    });
+
+    // Session 2: Tab closed, memory cleared, different user logs in
+    useConversationStore.setState({
+      messages: {},
+      presence: {},
+      rooms: [],
+      activePeer: null,
+      roomSequences: {},
+      currentUsername: null,
+    });
+
+    // Bob logs in - should see empty messages
+    useConversationStore.getState().setCurrentUser('bob');
+    expect(useConversationStore.getState().messages['charlie']).toBeUndefined();
+
+    // Alice logs back in - her full conversation history is restored!
+    useConversationStore.getState().setCurrentUser('alice');
+    const restoredAliceMessages = useConversationStore.getState().messages['charlie'];
+    expect(restoredAliceMessages).toBeDefined();
+    expect(restoredAliceMessages.length).toBe(2);
+    expect(restoredAliceMessages[0].text).toBe('Hey Charlie, remember this tomorrow!');
+    expect(restoredAliceMessages[1].text).toBe('I will remember it.');
+  });
+
+  it('deduplicates messages by id to prevent duplicate display', () => {
+    useConversationStore.getState().setCurrentUser('alice');
+    const msg = {
+      id: 'dup-1',
+      sender: 'alice',
+      text: 'Once only',
+      timestamp: Date.now(),
+    };
+
+    useConversationStore.getState().addMessage('bob', msg);
+    useConversationStore.getState().addMessage('bob', msg); // same id
+
+    expect(useConversationStore.getState().messages['bob'].length).toBe(1);
+  });
+});

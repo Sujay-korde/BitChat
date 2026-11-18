@@ -110,6 +110,7 @@ export class SecureChatClient {
   private myDmSequences: Map<string, number> = new Map();
   private joinedRooms: Set<string> = new Set();
   private sentKxPeers: Set<string> = new Set();
+  private pendingOutgoingMessages: Map<string, Array<{ msgId: string; text: string; timestamp: number }>> = new Map();
   
   private heartbeatInterval: any = null;
   private shouldReconnect: boolean = true;
@@ -356,6 +357,30 @@ export class SecureChatClient {
             this.sentKxPeers.add(envelope.sender);
             await this.sendKeyExchange(envelope.sender);
           }
+
+          // Automatically drain any queued pending messages for this peer
+          const queued = this.pendingOutgoingMessages.get(envelope.sender);
+          if (queued && queued.length > 0) {
+            this.pendingOutgoingMessages.delete(envelope.sender);
+            for (const item of queued) {
+              try {
+                const seq = (this.myDmSequences.get(envelope.sender) || 0) + 1;
+                this.myDmSequences.set(envelope.sender, seq);
+                this._saveState();
+
+                const aad = this._buildAAD(1, MessageType.MSG, TargetType.USER, envelope.sender, 0, this.username, seq);
+                const ciphertext = await this.crypto.encrypt(sharedKey, item.text, aad);
+                const payload = {
+                  key_version: 0,
+                  sequence_number: seq,
+                  ciphertext
+                };
+                await this._sendRaw(MessageType.MSG, envelope.sender, TargetType.USER, JSON.stringify(payload));
+              } catch (drainErr) {
+                console.error(`Failed to drain pending message ${item.msgId} to ${envelope.sender}:`, drainErr);
+              }
+            }
+          }
         } catch (e) {
           console.error("Key exchange failed", e);
         }
@@ -495,11 +520,44 @@ export class SecureChatClient {
       return;
     }
 
+    const sharedKey = this.sharedKeys.get(peer);
+    if (!sharedKey) {
+      // Key exchange not yet established: queue message and transparently perform key exchange
+      const randSuffix = Math.random().toString(36).substring(2, 8);
+      const msgId = `${this.username}-${Date.now()}-${randSuffix}`;
+
+      const pendingList = this.pendingOutgoingMessages.get(peer) || [];
+      pendingList.push({ msgId, text, timestamp: Date.now() });
+      this.pendingOutgoingMessages.set(peer, pendingList);
+
+      // Immediately display locally with PENDING status (WhatsApp style clock / pending)
+      this.dispatch({
+        type: "MessageReceived",
+        sender: this.username,
+        target: peer,
+        text: text,
+        msg_id: msgId
+      });
+
+      this.dispatch({
+        type: "MessageStatusChanged",
+        msg_id: msgId,
+        state: MessageState.PENDING
+      });
+
+      // Initiate key exchange if not already in flight
+      if (!this.sentKxPeers.has(peer)) {
+        try {
+          await this.sendKeyExchange(peer);
+        } catch (e) {
+          console.warn(`Auto key-exchange initiation failed for ${peer}:`, e);
+        }
+      }
+      return;
+    }
+
     let payloadJson: string;
     try {
-      const sharedKey = this.sharedKeys.get(peer);
-      if (!sharedKey) throw new Error("No shared key for peer");
-      
       const seq = (this.myDmSequences.get(peer) || 0) + 1;
       this.myDmSequences.set(peer, seq);
       this._saveState();
