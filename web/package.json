@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "backend": "cd .. && python -m securechat.server.main",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview"
