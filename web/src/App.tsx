@@ -43,7 +43,14 @@ function App() {
           const currentUsername = useConnectionStore.getState().username;
           // If we are the target (DM to us), map the conversation to the sender.
           // Otherwise (e.g. room), target remains the target.
-          const conversationTarget = event.target === currentUsername ? event.sender : event.target;
+          const isDirectMessage = event.target === currentUsername;
+          const conversationTarget = isDirectMessage ? event.sender : event.target;
+          
+          if (!isDirectMessage) {
+            // It's a room message! Automatically ensure the room is registered in our rooms list
+            useConversationStore.getState().joinRoom(conversationTarget);
+          }
+
           addMessage(conversationTarget, {
             id: event.msg_id || Date.now().toString(),
             sender: event.sender,

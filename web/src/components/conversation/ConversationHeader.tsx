@@ -55,14 +55,14 @@ export function ConversationHeader({ peer }: ConversationHeaderProps) {
         )}
         <div className={styles.details}>
           <div className={styles.titleRow}>
-            <h1 className={styles.title}>{peer}</h1>
-            <span className={styles.badge}>{isRoom ? 'channel' : 'direct message'}</span>
+            <h1 className={styles.title}>{isRoom ? `#${peer}` : peer}</h1>
+            <span className={styles.badge}>{isRoom ? 'text channel' : 'direct message'}</span>
           </div>
           <div className={styles.status}>
             {isRoom ? (
               <>
                 <span className={styles.secureDot} />
-                <span>Room Group Encryption</span>
+                <span>Group Channel • Shared E2EE</span>
               </>
             ) : (
               <>

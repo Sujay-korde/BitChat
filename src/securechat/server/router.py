@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from securechat.protocol.schema import MessageEnvelope
-from securechat.protocol.types import MessageType
+from securechat.protocol.types import MessageType, TargetType
 
 
 @dataclass(slots=True)
@@ -26,16 +26,18 @@ class MessageRouter:
                 pass
             return RoutedAction("auth", auth_payload)
         if envelope.type == MessageType.JOIN:
-            return RoutedAction("join", {"room": envelope.target, "username": envelope.sender})
+            return RoutedAction("join", {"room": envelope.target.strip().lstrip("#@").lower(), "username": envelope.sender})
         if envelope.type == MessageType.LEAVE:
-            return RoutedAction("leave", {"room": envelope.target, "username": envelope.sender})
+            return RoutedAction("leave", {"room": envelope.target.strip().lstrip("#@").lower(), "username": envelope.sender})
         if envelope.type == MessageType.MSG:
+            raw_target = envelope.target
+            target = raw_target.strip().lstrip("#@").lower() if envelope.target_type == TargetType.ROOM else raw_target
             return RoutedAction(
                 "message",
                 {
                     "msg_id": envelope.msg_id,
                     "sender": envelope.sender,
-                    "target": envelope.target,
+                    "target": target,
                     "target_type": envelope.target_type.value,
                     "ciphertext": envelope.payload,
                 },

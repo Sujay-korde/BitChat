@@ -242,13 +242,15 @@ export const useConversationStore = create<ConversationStateStore>((set, get) =>
   }),
 
   joinRoom: (room) => set((state) => {
-    const newRooms = state.rooms.includes(room) ? state.rooms : [...state.rooms, room];
+    const norm = room.trim().replace(/^[#@]+/, '').toLowerCase();
+    const newRooms = state.rooms.includes(norm) ? state.rooms : [...state.rooms, norm];
     saveToLocalStorage(state.currentUsername, 'rooms', newRooms);
     return { rooms: newRooms };
   }),
   
   leaveRoom: (room) => set((state) => {
-    const newRooms = state.rooms.filter(r => r !== room);
+    const norm = room.trim().replace(/^[#@]+/, '').toLowerCase();
+    const newRooms = state.rooms.filter(r => r !== norm);
     saveToLocalStorage(state.currentUsername, 'rooms', newRooms);
     return { rooms: newRooms };
   }),

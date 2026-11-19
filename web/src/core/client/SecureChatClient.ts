@@ -263,11 +263,12 @@ export class SecureChatClient {
       case MessageType.MSG:
         try {
           if (envelope.target_type === TargetType.ROOM) {
-            let roomCtx = this.roomKeys.get(envelope.target);
+            const normRoom = envelope.target.trim().replace(/^[#@]+/, '').toLowerCase();
+            let roomCtx = this.roomKeys.get(normRoom);
             if (!roomCtx) {
-              const rawKey = await this._deriveRoomKey(envelope.target);
+              const rawKey = await this._deriveRoomKey(normRoom);
               roomCtx = { key: rawKey, version: 1 };
-              this.roomKeys.set(envelope.target, roomCtx);
+              this.roomKeys.set(normRoom, roomCtx);
               this._saveState();
             }
             
@@ -278,17 +279,17 @@ export class SecureChatClient {
             }
             
             // Check sequence number for replay protection
-            let roomSeqs = this.roomSequences.get(envelope.target);
+            let roomSeqs = this.roomSequences.get(normRoom);
             if (!roomSeqs) {
               roomSeqs = new Map();
-              this.roomSequences.set(envelope.target, roomSeqs);
+              this.roomSequences.set(normRoom, roomSeqs);
             }
             const lastSeq = roomSeqs.get(envelope.sender) || 0;
             if (data.sequence_number <= lastSeq) {
               throw new Error("Message rejected: Replay detected");
             }
             
-            const aad = this._buildAAD(1, envelope.type, envelope.target_type, envelope.target, data.key_version, envelope.sender, data.sequence_number);
+            const aad = this._buildAAD(1, envelope.type, envelope.target_type, normRoom, data.key_version, envelope.sender, data.sequence_number);
             const plaintext = await this.crypto.decrypt(roomCtx.key, data.ciphertext, aad);
             
             // Update sequence
@@ -297,7 +298,7 @@ export class SecureChatClient {
             this.dispatch({
               type: "MessageReceived",
               sender: envelope.sender,
-              target: envelope.target,
+              target: normRoom,
               text: plaintext,
               msg_id: envelope.msg_id
             });
@@ -472,27 +473,29 @@ export class SecureChatClient {
     if (this.state !== ConnectionState.READY) throw new Error("Not ready");
     if (!this.username) throw new Error("Not authenticated");
     
+    const normRoom = room.trim().replace(/^[#@]+/, '').toLowerCase();
+
     const isValid = await this.moderation.moderate(text);
     if (!isValid) {
-      this.dispatch({ type: "ModerationRejected", target: room, text });
+      this.dispatch({ type: "ModerationRejected", target: normRoom, text });
       return;
     }
 
     let payloadJson: string;
     try {
-      let roomCtx = this.roomKeys.get(room);
+      let roomCtx = this.roomKeys.get(normRoom);
       if (!roomCtx) {
-        const rawKey = await this._deriveRoomKey(room);
+        const rawKey = await this._deriveRoomKey(normRoom);
         roomCtx = { key: rawKey, version: 1 };
-        this.roomKeys.set(room, roomCtx);
+        this.roomKeys.set(normRoom, roomCtx);
         this._saveState();
       }
       
-      const seq = (this.myRoomSequences.get(room) || 0) + 1;
-      this.myRoomSequences.set(room, seq);
+      const seq = (this.myRoomSequences.get(normRoom) || 0) + 1;
+      this.myRoomSequences.set(normRoom, seq);
       this._saveState();
 
-      const aad = this._buildAAD(1, MessageType.MSG, TargetType.ROOM, room, roomCtx.version, this.username, seq);
+      const aad = this._buildAAD(1, MessageType.MSG, TargetType.ROOM, normRoom, roomCtx.version, this.username, seq);
       const ciphertext = await this.crypto.encrypt(roomCtx.key, text, aad);
       
       const payload = {
@@ -506,12 +509,12 @@ export class SecureChatClient {
       return;
     }
 
-    const msgId = await this._sendRaw(MessageType.MSG, room, TargetType.ROOM, payloadJson);
+    const msgId = await this._sendRaw(MessageType.MSG, normRoom, TargetType.ROOM, payloadJson);
     
     this.dispatch({
       type: "MessageReceived",
       sender: this.username,
-      target: room,
+      target: normRoom,
       text: text,
       msg_id: msgId
     });
@@ -615,22 +618,25 @@ export class SecureChatClient {
   }
 
   async joinRoom(room: string) {
-    this.joinedRooms.add(room);
+    const norm = room.trim().replace(/^[#@]+/, '').toLowerCase();
+    this.joinedRooms.add(norm);
     if (this.state !== ConnectionState.READY) return;
-    await this._sendRaw(MessageType.JOIN, room, TargetType.ROOM, "");
+    await this._sendRaw(MessageType.JOIN, norm, TargetType.ROOM, "");
   }
 
   async leaveRoom(room: string) {
-    this.joinedRooms.delete(room);
+    const norm = room.trim().replace(/^[#@]+/, '').toLowerCase();
+    this.joinedRooms.delete(norm);
     if (this.state !== ConnectionState.READY) return;
-    await this._sendRaw(MessageType.LEAVE, room, TargetType.ROOM, "");
+    await this._sendRaw(MessageType.LEAVE, norm, TargetType.ROOM, "");
   }
 
   public syncRooms(rooms: string[]) {
     for (const r of rooms) {
-      this.joinedRooms.add(r);
+      const norm = r.trim().replace(/^[#@]+/, '').toLowerCase();
+      this.joinedRooms.add(norm);
       if (this.state === ConnectionState.READY) {
-        void this._sendRaw(MessageType.JOIN, r, TargetType.ROOM, "");
+        void this._sendRaw(MessageType.JOIN, norm, TargetType.ROOM, "");
       }
     }
   }

@@ -38,6 +38,7 @@ class ChatServer:
     sessions: dict[str, ChatSession] = field(default_factory=dict)
     message_queue: dict[str, list[dict[str, object]]] = field(default_factory=dict)
     registered_identities: dict[str, str] = field(default_factory=dict)
+    room_message_history: dict[str, list[dict[str, object]]] = field(default_factory=dict)
     media_server: MediaBlobServer | None = None
     _prune_task: asyncio.Task | None = None
 
@@ -415,14 +416,17 @@ class ChatServer:
             return None
 
         if action.kind == "join":
-            room = action.payload["room"]
+            room = action.payload["room"].strip().lstrip("#@").lower()
             self.rooms.join(room, username)
             session.rooms.add(room)
             logger.info("JOIN: %s -> %s", username, room)
             await self._broadcast_presence(room, username, "joined")
+            for past_msg in self.room_message_history.get(room, []):
+                if past_msg.get("sender") != username:
+                    await self._safe_send(session, past_msg)
 
         elif action.kind == "leave":
-            room = action.payload["room"]
+            room = action.payload["room"].strip().lstrip("#@").lower()
             self.rooms.leave(room, username)
             session.rooms.discard(room)
             logger.info("LEAVE: %s -> %s", username, room)
@@ -533,9 +537,16 @@ class ChatServer:
         }
 
         if target_type == TargetType.ROOM.value:
+            norm_target = target.strip().lstrip("#@").lower()
+            message["target"] = norm_target
+            history = self.room_message_history.setdefault(norm_target, [])
+            if len(history) >= 50:
+                history.pop(0)
+            history.append(message)
+
             send_tasks = [
                 self._safe_send(self.sessions[member], message)
-                for member in self.rooms.members(target)
+                for member in self.rooms.members(norm_target)
                 if member != sender and member in self.sessions
             ]
             if send_tasks:

@@ -159,4 +159,49 @@ describe('SecureChatClient', () => {
     const anyPlaintext = JSON.stringify(transport.sentFrames).includes("secret plaintext message");
     expect(anyPlaintext).toBe(false);
   });
+
+  it('should join a room and send and receive encrypted room messages', async () => {
+    transport.injectFrame({
+      type: "AUTH_OK", msg_id: "s-1", sender: "server", target: "alice", target_type: "user", timestamp: 123, payload: "ok"
+    });
+    await client.connect("alice");
+    await new Promise(r => setTimeout(r, 50));
+
+    // Join room dev
+    transport.sentFrames = [];
+    await client.joinRoom("dev");
+    expect(transport.sentFrames.some(f => f.type === "JOIN" && f.target === "dev")).toBe(true);
+
+    // Send room message
+    transport.sentFrames = [];
+    await client.sendRoomMessage("dev", "hello dev group");
+    const roomMsgFrame = transport.sentFrames.find(f => f.type === "MSG" && f.target === "dev");
+    expect(roomMsgFrame).toBeDefined();
+    expect(roomMsgFrame.target_type).toBe("room");
+
+    // Receive room message from Bob in dev
+    let receivedText = "";
+    client.onEvent(e => {
+      if (e.type === "MessageReceived" && e.target === "dev") {
+        receivedText = e.text;
+      }
+    });
+
+    transport.injectFrame({
+      type: "MSG",
+      msg_id: "bob-msg-1",
+      sender: "bob",
+      target: "dev",
+      target_type: "room",
+      timestamp: 123456,
+      payload: JSON.stringify({
+        key_version: 1,
+        sequence_number: 1,
+        ciphertext: "enc-bob reply in dev"
+      })
+    });
+    await new Promise(r => setTimeout(r, 50));
+
+    expect(receivedText).toBe("bob reply in dev");
+  });
 });

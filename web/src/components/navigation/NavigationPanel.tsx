@@ -174,17 +174,18 @@ export function NavigationPanel() {
   const filteredDms = dms.filter(filterItem);
 
   const handleStartChat = (targetId: string, isGroup: boolean) => {
-    const trimmed = targetId.trim();
-    if (!trimmed) return;
+    const raw = targetId.trim();
+    if (!raw) return;
+    const clean = raw.replace(/^[#@]+/, '').toLowerCase();
 
     if (isGroup) {
-      client.joinRoom(trimmed).catch(console.error);
-      joinRoom(trimmed);
+      client.joinRoom(clean).catch(console.error);
+      joinRoom(clean);
     } else {
-      client.sendKeyExchange(trimmed).catch(console.error);
+      client.sendKeyExchange(clean).catch(console.error);
     }
 
-    setActivePeer(trimmed);
+    setActivePeer(clean);
     setDrawerType(null);
     setInputVal('');
     setSearchQuery('');
@@ -194,10 +195,6 @@ export function NavigationPanel() {
     e.preventDefault();
     handleStartChat(inputVal, drawerType === 'group');
   };
-
-  const exactMatchExists = conversationList.some(
-    (c) => c.id.toLowerCase() === searchQuery.trim().toLowerCase()
-  );
 
   return (
     <nav className={styles.nav} aria-label="Main Navigation">
@@ -294,14 +291,47 @@ export function NavigationPanel() {
 
       {/* Scrollable Content */}
       <div className={styles.scrollContent}>
-        {/* Quick Start Search Hit */}
-        {searchQuery.trim() && !exactMatchExists && (
-          <div
-            className={styles.startChatRow}
-            onClick={() => handleStartChat(searchQuery.trim(), false)}
-          >
-            <span>💬</span>
-            <span>Message &ldquo;<strong>{searchQuery.trim()}</strong>&rdquo;</span>
+        {/* Quick Action Search Hits */}
+        {searchQuery.trim() && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '12px' }}>
+            {/* Join Channel Option */}
+            <div
+              className={styles.startChatRow}
+              style={{
+                color: '#23a55a',
+                borderColor: 'rgba(35, 165, 90, 0.4)',
+                backgroundColor: 'rgba(35, 165, 90, 0.08)',
+              }}
+              onClick={() => handleStartChat(searchQuery, true)}
+              title={`Join channel #${searchQuery.trim().replace(/^[#@]+/, '').toLowerCase()}`}
+            >
+              <span style={{ fontSize: '18px', fontWeight: 700, width: '20px', textAlign: 'center' }}>#</span>
+              <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                <span style={{ fontWeight: 600, color: '#f2f3f5', fontSize: '13.5px' }}>
+                  Join Channel <strong>#{searchQuery.trim().replace(/^[#@]+/, '').toLowerCase()}</strong>
+                </span>
+                <span style={{ fontSize: '11px', color: '#949ba4' }}>
+                  Group channel • Everyone in #{searchQuery.trim().replace(/^[#@]+/, '').toLowerCase()} chats together
+                </span>
+              </div>
+            </div>
+
+            {/* Direct Message Option */}
+            <div
+              className={styles.startChatRow}
+              onClick={() => handleStartChat(searchQuery, false)}
+              title={`Direct message @${searchQuery.trim().replace(/^[#@]+/, '').toLowerCase()}`}
+            >
+              <span style={{ fontSize: '16px', width: '20px', textAlign: 'center' }}>💬</span>
+              <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                <span style={{ fontWeight: 600, color: '#f2f3f5', fontSize: '13.5px' }}>
+                  Direct Message <strong>@{searchQuery.trim().replace(/^[#@]+/, '').toLowerCase()}</strong>
+                </span>
+                <span style={{ fontSize: '11px', color: '#949ba4' }}>
+                  Private 1-on-1 chat with user
+                </span>
+              </div>
+            </div>
           </div>
         )}
 
