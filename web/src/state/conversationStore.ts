@@ -7,6 +7,9 @@ export interface Message {
   text: string;
   timestamp: number;
   status?: MessageState;
+  isUploading?: boolean;
+  uploadProgress?: number; // 0 - 100
+  error?: string;
 }
 
 interface ConversationStateStore {
@@ -21,7 +24,12 @@ interface ConversationStateStore {
   loadUserConversations: (username: string) => void;
   setActivePeer: (peer: string | null) => void;
   addMessage: (target: string, message: Message) => void;
+  deleteMessage: (target: string, msgId: string) => void;
+  deleteChat: (target: string) => void;
+  clearChat: (target: string) => void;
   updateMessageStatus: (msgId: string, status: MessageState) => void;
+  updateMessageProgress: (msgId: string, progress: number) => void;
+  updateMessage: (msgId: string, updates: Partial<Message>) => void;
   setPresence: (room: string, user: string, status: string) => void;
   joinRoom: (room: string) => void;
   leaveRoom: (room: string) => void;
@@ -108,6 +116,52 @@ export const useConversationStore = create<ConversationStateStore>((set, get) =>
     return { messages: newMessages };
   }),
 
+  deleteMessage: (target, msgId) => set((state) => {
+    const existing = state.messages[target];
+    if (!existing) return state;
+
+    const updated = existing.filter(m => m.id !== msgId);
+    const newMessages = {
+      ...state.messages,
+      [target]: updated,
+    };
+
+    saveToLocalStorage(state.currentUsername, 'messages', newMessages);
+    return { messages: newMessages };
+  }),
+
+  deleteChat: (target) => set((state) => {
+    const newMessages = { ...state.messages };
+    delete newMessages[target];
+
+    const newRooms = state.rooms.filter(r => r !== target);
+
+    let newActivePeer = state.activePeer;
+    if (state.activePeer === target) {
+      newActivePeer = newRooms[0] || Object.keys(newMessages)[0] || null;
+    }
+
+    saveToLocalStorage(state.currentUsername, 'messages', newMessages);
+    saveToLocalStorage(state.currentUsername, 'rooms', newRooms);
+    saveToLocalStorage(state.currentUsername, 'active_peer', newActivePeer);
+
+    return {
+      messages: newMessages,
+      rooms: newRooms,
+      activePeer: newActivePeer,
+    };
+  }),
+
+  clearChat: (target) => set((state) => {
+    const newMessages = {
+      ...state.messages,
+      [target]: [],
+    };
+
+    saveToLocalStorage(state.currentUsername, 'messages', newMessages);
+    return { messages: newMessages };
+  }),
+
   updateMessageStatus: (msgId, status) => set((state) => {
     let changed = false;
     const newMessages: Record<string, Message[]> = {};
@@ -128,19 +182,63 @@ export const useConversationStore = create<ConversationStateStore>((set, get) =>
     return { messages: newMessages };
   }),
 
+  updateMessageProgress: (msgId, progress) => set((state) => {
+    let changed = false;
+    const newMessages: Record<string, Message[]> = {};
+
+    for (const target of Object.keys(state.messages)) {
+      newMessages[target] = state.messages[target].map((msg) => {
+        if (msg.id === msgId) {
+          changed = true;
+          return { ...msg, uploadProgress: progress, isUploading: progress < 100 };
+        }
+        return msg;
+      });
+    }
+
+    if (!changed) return state;
+    return { messages: newMessages };
+  }),
+
+  updateMessage: (msgId, updates) => set((state) => {
+    let changed = false;
+    const newMessages: Record<string, Message[]> = {};
+
+    for (const target of Object.keys(state.messages)) {
+      newMessages[target] = state.messages[target].map((msg) => {
+        if (msg.id === msgId) {
+          changed = true;
+          return { ...msg, ...updates };
+        }
+        return msg;
+      });
+    }
+
+    if (!changed) return state;
+
+    saveToLocalStorage(state.currentUsername, 'messages', newMessages);
+    return { messages: newMessages };
+  }),
+
   setPresence: (room, user, status) => set((state) => {
     const key = `${room}:${user}`;
+    const newPresence = { ...state.presence };
+
     if (status === 'offline' || status === 'left') {
-      const newPresence = { ...state.presence };
       delete newPresence[key];
-      return { presence: newPresence };
-    }
-    return {
-      presence: {
-        ...state.presence,
-        [key]: status,
+      // Check if user is still online in any other room or context
+      const hasOther = Object.entries(newPresence).some(
+        ([k, s]) => k !== user && k.endsWith(`:${user}`) && (s === 'online' || s === 'active')
+      );
+      if (!hasOther) {
+        delete newPresence[user];
       }
-    };
+    } else {
+      newPresence[key] = status;
+      newPresence[user] = status;
+    }
+
+    return { presence: newPresence };
   }),
 
   joinRoom: (room) => set((state) => {

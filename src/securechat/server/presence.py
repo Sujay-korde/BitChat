@@ -6,6 +6,8 @@ from enum import StrEnum
 class PresenceStatus(StrEnum):
     ONLINE = "online"
     OFFLINE = "offline"
+    AWAY = "away"
+    ACTIVE = "active"
 
 
 class PresenceManager:

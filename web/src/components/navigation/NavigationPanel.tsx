@@ -109,9 +109,10 @@ export function NavigationPanel() {
       const dmMappings = messages[target] || [];
       const lastMsg = dmMappings[dmMappings.length - 1];
       
-      const isPeerOnline = Object.entries(presence).some(([key, status]) =>
-        key.includes(target) && status === 'online'
-      );
+      const statusVal = presence[target] || Object.entries(presence).find(([key, s]) =>
+        (key === target || key.endsWith(`:${target}`)) && (s === 'online' || s === 'active' || s === 'away')
+      )?.[1];
+      const isPeerOnline = statusVal === 'online' || statusVal === 'active';
 
       list.push({
         id: target,
@@ -127,6 +128,11 @@ export function NavigationPanel() {
 
     // 3. If activePeer is not in the list yet, add it
     if (activePeer && !seen.has(activePeer)) {
+      const activeStatus = presence[activePeer] || Object.entries(presence).find(([key, s]) =>
+        (key === activePeer || key.endsWith(`:${activePeer}`)) && (s === 'online' || s === 'active' || s === 'away')
+      )?.[1];
+      const isActivePeerOnline = activeStatus === 'online' || activeStatus === 'active';
+
       list.push({
         id: activePeer,
         isRoom: rooms.includes(activePeer),
@@ -134,9 +140,7 @@ export function NavigationPanel() {
         lastMessageText: '',
         lastMessageTime: 0,
         lastMessageSender: '',
-        isOnline: Object.entries(presence).some(([key, status]) =>
-          key.includes(activePeer) && status === 'online'
-        ),
+        isOnline: isActivePeerOnline,
       });
     }
 
@@ -326,7 +330,10 @@ export function NavigationPanel() {
                     <li
                       key={item.id}
                       className={`${styles.channelItem} ${isSelected ? styles.channelItemActive : ''}`}
-                      onClick={() => setActivePeer(item.id)}
+                      onClick={() => {
+                        client.joinRoom(item.id).catch(console.error);
+                        setActivePeer(item.id);
+                      }}
                     >
                       <span className={styles.channelHash}>#</span>
                       <span className={styles.channelName}>{item.title}</span>
@@ -364,7 +371,6 @@ export function NavigationPanel() {
               ) : (
                 filteredDms.map((item) => {
                   const isSelected = activePeer === item.id;
-                  const isOwn = item.lastMessageSender === username;
                   return (
                     <li
                       key={item.id}
@@ -387,7 +393,6 @@ export function NavigationPanel() {
                           </span>
                         </div>
                         <div className={styles.dmSnippet}>
-                          {isOwn && <span style={{ color: '#5865f2' }}>✓ </span>}
                           <span>{item.lastMessageText || 'No messages yet'}</span>
                         </div>
                       </div>

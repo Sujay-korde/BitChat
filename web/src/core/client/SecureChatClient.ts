@@ -8,6 +8,13 @@ import type { CryptoProvider } from "../crypto/CryptoProvider";
 import type { ModerationProvider } from "../moderation/ModerationProvider";
 
 export class SecureChatClient {
+  private async _deriveRoomKey(room: string): Promise<Uint8Array> {
+    const normalized = room.trim().toLowerCase();
+    const encoder = new TextEncoder();
+    const hash = await crypto.subtle.digest("SHA-256", encoder.encode(`bitchat-room-v1:${normalized}`));
+    return new Uint8Array(hash);
+  }
+
   private _bytesToBase64(bytes: Uint8Array): string {
     let binary = '';
     for (let i = 0; i < bytes.byteLength; i++) {
@@ -226,6 +233,8 @@ export class SecureChatClient {
         for (const room of this.joinedRooms) {
           void this._sendRaw(MessageType.JOIN, room, TargetType.ROOM, "");
         }
+        void this.sendPresence("active");
+        void this.queryPresence();
         break;
       case MessageType.AUTH_FAIL:
         this.dispatch({ type: "ErrorOccurred", reason: `Auth failed: ${envelope.payload}` });
@@ -254,8 +263,13 @@ export class SecureChatClient {
       case MessageType.MSG:
         try {
           if (envelope.target_type === TargetType.ROOM) {
-            const roomCtx = this.roomKeys.get(envelope.target);
-            if (!roomCtx) throw new Error("No room key");
+            let roomCtx = this.roomKeys.get(envelope.target);
+            if (!roomCtx) {
+              const rawKey = await this._deriveRoomKey(envelope.target);
+              roomCtx = { key: rawKey, version: 1 };
+              this.roomKeys.set(envelope.target, roomCtx);
+              this._saveState();
+            }
             
             // For room MSG, payload is JSON containing { key_version, sequence_number, ciphertext }
             const data = JSON.parse(envelope.payload);
@@ -468,8 +482,7 @@ export class SecureChatClient {
     try {
       let roomCtx = this.roomKeys.get(room);
       if (!roomCtx) {
-        // Auto-generate room key v1 if none exists for this room
-        const rawKey = await this.crypto.generateRoomKey();
+        const rawKey = await this._deriveRoomKey(room);
         roomCtx = { key: rawKey, version: 1 };
         this.roomKeys.set(room, roomCtx);
         this._saveState();
@@ -611,6 +624,33 @@ export class SecureChatClient {
     this.joinedRooms.delete(room);
     if (this.state !== ConnectionState.READY) return;
     await this._sendRaw(MessageType.LEAVE, room, TargetType.ROOM, "");
+  }
+
+  public syncRooms(rooms: string[]) {
+    for (const r of rooms) {
+      this.joinedRooms.add(r);
+      if (this.state === ConnectionState.READY) {
+        void this._sendRaw(MessageType.JOIN, r, TargetType.ROOM, "");
+      }
+    }
+  }
+
+  async sendPresence(status: string) {
+    if (this.state !== ConnectionState.READY || !this.username) return;
+    try {
+      await this._sendRaw(MessageType.PRESENCE, "global", TargetType.USER, status);
+    } catch (e) {
+      console.warn("Failed to send presence:", e);
+    }
+  }
+
+  async queryPresence() {
+    if (this.state !== ConnectionState.READY || !this.username) return;
+    try {
+      await this._sendRaw(MessageType.PRESENCE, "server", TargetType.USER, "query");
+    } catch (e) {
+      console.warn("Failed to query presence:", e);
+    }
   }
 
   async generateAndDistributeRoomKey(room: string, members: string[]) {

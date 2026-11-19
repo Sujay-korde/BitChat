@@ -98,4 +98,65 @@ describe('ConversationStore & WhatsApp Persistence', () => {
 
     expect(useConversationStore.getState().messages['bob'].length).toBe(1);
   });
+
+  it('deletes an individual message from a conversation', () => {
+    const store = useConversationStore.getState();
+    store.setCurrentUser('alice');
+    store.addMessage('bob', { id: 'm1', sender: 'alice', text: 'hi', timestamp: Date.now() });
+    store.addMessage('bob', { id: 'm2', sender: 'bob', text: 'hey', timestamp: Date.now() });
+
+    expect(useConversationStore.getState().messages['bob'].length).toBe(2);
+
+    store.deleteMessage('bob', 'm1');
+    expect(useConversationStore.getState().messages['bob'].length).toBe(1);
+    expect(useConversationStore.getState().messages['bob'][0].id).toBe('m2');
+  });
+
+  it('deletes entire chat conversation and updates active peer', () => {
+    const store = useConversationStore.getState();
+    store.setCurrentUser('alice');
+    store.addMessage('bob', { id: 'm1', sender: 'alice', text: 'hi', timestamp: Date.now() });
+    store.addMessage('carol', { id: 'm2', sender: 'carol', text: 'hey', timestamp: Date.now() });
+    store.setActivePeer('bob');
+
+    store.deleteChat('bob');
+    expect(useConversationStore.getState().messages['bob']).toBeUndefined();
+    expect(useConversationStore.getState().messages['carol']).toBeDefined();
+    expect(useConversationStore.getState().activePeer).toBe('carol');
+  });
+
+  it('tracks asynchronous upload progress on media messages', () => {
+    const store = useConversationStore.getState();
+    store.setCurrentUser('alice');
+    store.addMessage('bob', {
+      id: 'upload-123',
+      sender: 'alice',
+      text: JSON.stringify({ type: 'uploading_attachment', file_name: 'test.png', progress: 0 }),
+      timestamp: Date.now(),
+      isUploading: true,
+      uploadProgress: 0,
+    });
+
+    store.updateMessageProgress('upload-123', 60);
+    const msg = useConversationStore.getState().messages['bob'][0];
+    expect(msg.uploadProgress).toBe(60);
+    expect(msg.isUploading).toBe(true);
+
+    store.updateMessageProgress('upload-123', 100);
+    const msgDone = useConversationStore.getState().messages['bob'][0];
+    expect(msgDone.uploadProgress).toBe(100);
+    expect(msgDone.isUploading).toBe(false);
+  });
+
+  it('tracks user and room presence accurately', () => {
+    const store = useConversationStore.getState();
+    store.setPresence('global', 'bob', 'online');
+    expect(useConversationStore.getState().presence['bob']).toBe('online');
+
+    store.setPresence('general', 'carol', 'active');
+    expect(useConversationStore.getState().presence['carol']).toBe('active');
+
+    store.setPresence('global', 'bob', 'offline');
+    expect(useConversationStore.getState().presence['bob']).toBeUndefined();
+  });
 });

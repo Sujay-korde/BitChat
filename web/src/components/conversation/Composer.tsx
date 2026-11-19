@@ -3,25 +3,29 @@ import type { KeyboardEvent, ChangeEvent } from 'react';
 import { client } from '../../App';
 import { useConnectionStore } from '../../state/connectionStore';
 import { useConversationStore } from '../../state/conversationStore';
-import { ConnectionState } from '../../core/client/events';
+import { ConnectionState, MessageState } from '../../core/client/events';
 import type { AttachmentDescriptor } from '../../core/client/events';
+import { EmojiPicker } from './EmojiPicker';
 
 interface ComposerProps {
   activePeer: string;
 }
 
-const COMMON_EMOJIS = ['😀','😂','❤️','👍','🎉','🔥','🤔','👀','🙌','✨','😊','😎','😢','🙏','💯'];
-
 export function Composer({ activePeer }: ComposerProps) {
   const [text, setText] = useState('');
   const [showEmojis, setShowEmojis] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const { state } = useConnectionStore();
+  const { state, username: currentUser } = useConnectionStore();
   const rooms = useConversationStore(state => state.rooms);
-  
-  const disabled = state !== ConnectionState.READY || uploading;
+  const addMessage = useConversationStore(state => state.addMessage);
+  const deleteMessage = useConversationStore(state => state.deleteMessage);
+  const updateMessageProgress = useConversationStore(state => state.updateMessageProgress);
+  const updateMessage = useConversationStore(state => state.updateMessage);
+
+  // The composer is only disabled when disconnected or authenticating — NEVER when uploading media!
+  const disabled = state !== ConnectionState.READY;
   const emojiRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -29,17 +33,27 @@ export function Composer({ activePeer }: ComposerProps) {
         setShowEmojis(false);
       }
     };
+    const handleKeyDownGlobal = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowEmojis(false);
+      }
+    };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDownGlobal);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDownGlobal);
+    };
   }, []);
 
   const handleSend = () => {
     if (disabled || !text.trim()) return;
+    const msgText = text.trim();
     
     if (rooms.includes(activePeer)) {
-      client.sendRoomMessage(activePeer, text).catch(console.error);
+      client.sendRoomMessage(activePeer, msgText).catch(console.error);
     } else {
-      client.sendDirectMessage(activePeer, text).catch(console.error);
+      client.sendDirectMessage(activePeer, msgText).catch(console.error);
     }
     setText('');
     setShowEmojis(false);
@@ -52,7 +66,7 @@ export function Composer({ activePeer }: ComposerProps) {
     }
   };
 
-  const handleFileSelect = async (e: ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -62,56 +76,116 @@ export function Composer({ activePeer }: ComposerProps) {
       return;
     }
 
-    try {
-      setUploading(true);
-      const fileBytes = new Uint8Array(await file.arrayBuffer());
+    // Immediately clear file input so user can choose more files or keep typing freely
+    if (fileInputRef.current) fileInputRef.current.value = '';
 
-      const { ciphertext, descriptor } = await client.encryptAttachment(
-        fileBytes,
-        file.name,
-        file.type || 'application/octet-stream'
-      );
+    const uploadId = `upload-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+    const sender = currentUser || 'Me';
 
-      // Upload encrypted blob to zero-knowledge out-of-band media server
-      const baseUrl = client.getMediaBaseUrl();
-      const uploadRes = await fetch(`${baseUrl}/api/media/upload`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/octet-stream' },
-        body: ciphertext as unknown as BodyInit
-      });
+    // Insert optimistic uploading message into the active conversation
+    addMessage(activePeer, {
+      id: uploadId,
+      sender: sender,
+      text: JSON.stringify({
+        type: 'uploading_attachment',
+        file_name: file.name,
+        file_size: file.size,
+        mime_type: file.type || 'application/octet-stream',
+        progress: 0,
+      }),
+      timestamp: Date.now(),
+      status: MessageState.PENDING,
+      isUploading: true,
+      uploadProgress: 0,
+    });
 
-      if (!uploadRes.ok) {
-        throw new Error(`Media upload failed with HTTP ${uploadRes.status}`);
+    // Run non-blocking background upload without freezing the composer
+    void (async () => {
+      try {
+        updateMessageProgress(uploadId, 10);
+        const fileBytes = new Uint8Array(await file.arrayBuffer());
+
+        const { ciphertext, descriptor } = await client.encryptAttachment(
+          fileBytes,
+          file.name,
+          file.type || 'application/octet-stream'
+        );
+        updateMessageProgress(uploadId, 25);
+
+        // Upload encrypted blob via XMLHttpRequest to monitor real-time upload progress
+        const baseUrl = client.getMediaBaseUrl();
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `${baseUrl}/api/media/upload`);
+        xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+
+        xhr.upload.onprogress = (evt) => {
+          if (evt.lengthComputable) {
+            const pct = 25 + Math.round((evt.loaded / evt.total) * 70);
+            updateMessageProgress(uploadId, Math.min(95, pct));
+          }
+        };
+
+        xhr.onload = async () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              updateMessageProgress(uploadId, 100);
+              const resData = JSON.parse(xhr.responseText);
+              const fullDescriptor: AttachmentDescriptor = {
+                ...descriptor,
+                blob_id: resData.blob_id,
+              };
+
+              const payloadStr = JSON.stringify(fullDescriptor);
+
+              // Remove the temporary optimistic upload message
+              deleteMessage(activePeer, uploadId);
+
+              // Send the finalized encrypted attachment message
+              const currentRooms = useConversationStore.getState().rooms;
+              if (currentRooms.includes(activePeer)) {
+                await client.sendRoomMessage(activePeer, payloadStr);
+              } else {
+                await client.sendDirectMessage(activePeer, payloadStr);
+              }
+            } catch (dispatchErr: any) {
+              console.error("Failed to dispatch completed attachment:", dispatchErr);
+              updateMessage(uploadId, {
+                status: MessageState.FAILED,
+                isUploading: false,
+                error: dispatchErr.message || 'Failed to dispatch media'
+              });
+            }
+          } else {
+            updateMessage(uploadId, {
+              status: MessageState.FAILED,
+              isUploading: false,
+              error: `Media upload failed: HTTP ${xhr.status}`
+            });
+          }
+        };
+
+        xhr.onerror = () => {
+          updateMessage(uploadId, {
+            status: MessageState.FAILED,
+            isUploading: false,
+            error: 'Network error uploading attachment'
+          });
+        };
+
+        xhr.send(ciphertext as unknown as XMLHttpRequestBodyInit);
+      } catch (err: any) {
+        console.error("Failed to encrypt or upload attachment:", err);
+        updateMessage(uploadId, {
+          status: MessageState.FAILED,
+          isUploading: false,
+          error: err.message || 'Encryption failed'
+        });
       }
-
-      const resData = await uploadRes.json();
-      const fullDescriptor: AttachmentDescriptor = {
-        ...descriptor,
-        blob_id: resData.blob_id,
-        caption: text.trim() ? text.trim() : undefined
-      };
-
-      const payloadStr = JSON.stringify(fullDescriptor);
-      if (rooms.includes(activePeer)) {
-        await client.sendRoomMessage(activePeer, payloadStr);
-      } else {
-        await client.sendDirectMessage(activePeer, payloadStr);
-      }
-
-      setText('');
-    } catch (err) {
-      console.error("Failed to encrypt or upload attachment:", err);
-      alert(err instanceof Error ? err.message : "Failed to send attachment");
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
+    })();
   };
 
   const isRoom = rooms.includes(activePeer);
-  const placeholderText = uploading 
-    ? "Encrypting & uploading attachment..." 
-    : (disabled ? "Connecting..." : `Message ${isRoom ? '#' : '@'}${activePeer}`);
+  const placeholderText = disabled ? "Connecting..." : `Message ${isRoom ? '#' : '@'}${activePeer}`;
 
   return (
     <div style={{
@@ -124,41 +198,16 @@ export function Composer({ activePeer }: ComposerProps) {
       position: 'relative',
       minHeight: '44px',
     }}>
+      {/* Full Emoji Panel Popover */}
       {showEmojis && (
-        <div ref={emojiRef} style={{
-          position: 'absolute',
-          bottom: '100%',
-          left: '0',
-          marginBottom: '10px',
-          backgroundColor: '#2b2d31',
-          border: '1px solid #1f2023',
-          borderRadius: '8px',
-          padding: '10px',
-          display: 'grid',
-          gridTemplateColumns: 'repeat(5, 1fr)',
-          gap: '8px',
-          boxShadow: '0 8px 16px rgba(0,0,0,0.4)',
-          zIndex: 10
-        }}>
-          {COMMON_EMOJIS.map(emoji => (
-            <button
-              key={emoji}
-              onClick={() => setText(prev => prev + emoji)}
-              style={{
-                background: 'none',
-                border: 'none',
-                fontSize: '20px',
-                cursor: 'pointer',
-                padding: '4px',
-                borderRadius: '4px',
-                transition: 'background-color 0.1s ease',
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#35373c')}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-            >
-              {emoji}
-            </button>
-          ))}
+        <div ref={emojiRef}>
+          <EmojiPicker
+            onSelect={(emoji) => {
+              setText((prev) => prev + emoji);
+              textareaRef.current?.focus();
+            }}
+            onClose={() => setShowEmojis(false)}
+          />
         </div>
       )}
       
@@ -175,12 +224,12 @@ export function Composer({ activePeer }: ComposerProps) {
       <button
         onClick={() => fileInputRef.current?.click()}
         disabled={disabled}
-        title="Attach file (End-to-end encrypted)"
+        title="Attach file (End-to-end encrypted, non-blocking)"
         style={{
           width: '28px',
           height: '28px',
           borderRadius: '50%',
-          background: uploading ? '#5865f2' : '#4e5058',
+          background: '#4e5058',
           border: 'none',
           color: '#ffffff',
           fontSize: '16px',
@@ -192,15 +241,16 @@ export function Composer({ activePeer }: ComposerProps) {
           opacity: disabled ? 0.6 : 1,
           transition: 'background-color 0.15s ease',
         }}
-        onMouseEnter={(e) => { if (!uploading) e.currentTarget.style.backgroundColor = '#5d6069'; }}
-        onMouseLeave={(e) => { if (!uploading) e.currentTarget.style.backgroundColor = '#4e5058'; }}
+        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#5d6069'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#4e5058'; }}
       >
         +
       </button>
 
-      {/* Input Field */}
+      {/* Text Input Field - Never blocked by ongoing media uploads */}
       <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
         <textarea
+          ref={textareaRef}
           style={{
             width: '100%',
             background: 'transparent',
@@ -228,7 +278,7 @@ export function Composer({ activePeer }: ComposerProps) {
       <button 
         onClick={() => setShowEmojis(!showEmojis)}
         disabled={disabled}
-        title="Select Emoji"
+        title="Emoji Panel"
         style={{
           background: 'none',
           border: 'none',

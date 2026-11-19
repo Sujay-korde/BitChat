@@ -4,13 +4,21 @@ import { useConversationStore } from '../../state/conversationStore';
 export function PresenceDetails() {
   const { activePeer, presence } = useConversationStore();
   
-  // Presence comes as room:user -> status. Since we only have DMs right now,
-  // we check if the user is online in *any* context they share with us.
-  let isOnline = false;
+  let statusText = 'Offline';
+  let dotColor = 'var(--color-text-secondary)';
+
   if (activePeer) {
-    isOnline = Object.entries(presence).some(([key, status]) => 
-      key.includes(activePeer) && status === 'online'
-    );
+    const statusVal = presence[activePeer] || Object.entries(presence).find(([key, s]) => 
+      (key === activePeer || key.endsWith(`:${activePeer}`)) && (s === 'online' || s === 'active' || s === 'away')
+    )?.[1];
+
+    if (statusVal === 'online' || statusVal === 'active') {
+      statusText = 'Active Now';
+      dotColor = '#23a55a';
+    } else if (statusVal === 'away') {
+      statusText = 'Away';
+      dotColor = '#f0b232';
+    }
   }
 
   return (
@@ -19,7 +27,7 @@ export function PresenceDetails() {
       {activePeer ? (
         <div style={{ 
           fontSize: 'var(--text-sm)', 
-          color: isOnline ? 'var(--color-success)' : 'var(--color-text-secondary)',
+          color: dotColor,
           display: 'flex',
           alignItems: 'center',
           gap: '8px'
@@ -28,9 +36,9 @@ export function PresenceDetails() {
             width: '8px',
             height: '8px',
             borderRadius: '50%',
-            backgroundColor: isOnline ? 'var(--color-success)' : 'var(--color-text-secondary)'
+            backgroundColor: dotColor
           }} />
-          {isOnline ? 'Online' : 'Offline'}
+          {statusText}
         </div>
       ) : (
         <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>

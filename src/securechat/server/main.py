@@ -428,6 +428,14 @@ class ChatServer:
             logger.info("LEAVE: %s -> %s", username, room)
             await self._broadcast_presence(room, username, "left")
 
+        elif action.kind == "presence":
+            status = action.payload.get("status", "online")
+            if status in ("offline", "left"):
+                self.presence.set_offline(username)
+            else:
+                self.presence.set_online(username)
+            await self._broadcast_global_presence(username, status)
+
         elif action.kind == "heartbeat":
             session.last_heartbeat = time.time()
             await send_fn(self._response(MessageType.ACK, "server", username, "user", "alive"))
@@ -466,6 +474,16 @@ class ChatServer:
             self._safe_send(self.sessions[member], message)
             for member in self.rooms.members(room)
             if member != username and member in self.sessions
+        ]
+        if send_tasks:
+            await asyncio.gather(*send_tasks, return_exceptions=True)
+
+    async def _broadcast_global_presence(self, username: str, status: str) -> None:
+        message = self._response(MessageType.PRESENCE, "server", "global", TargetType.USER.value, f"{username}:{status}")
+        send_tasks = [
+            self._safe_send(session, message)
+            for user, session in list(self.sessions.items())
+            if user != username
         ]
         if send_tasks:
             await asyncio.gather(*send_tasks, return_exceptions=True)

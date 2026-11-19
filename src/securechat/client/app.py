@@ -113,7 +113,8 @@ class SecureChatApp(Generic[TTransport]):
         if room not in self.room_keys and room in self.shared_keys:
             self.room_keys[room] = (self.shared_keys[room], 1)
         elif room not in self.room_keys:
-            raw_key = os.urandom(32)
+            import hashlib
+            raw_key = hashlib.sha256(f"bitchat-room-v1:{room.strip().lower()}".encode()).digest()
             self.room_keys[room] = (raw_key, 1)
             self.shared_keys[room] = raw_key
 
@@ -236,6 +237,12 @@ class SecureChatApp(Generic[TTransport]):
                 if not room_info and target in self.shared_keys:
                     room_info = (self.shared_keys[target], 1)
                     self.room_keys[target] = room_info
+                elif not room_info:
+                    import hashlib
+                    raw_key = hashlib.sha256(f"bitchat-room-v1:{target.strip().lower()}".encode()).digest()
+                    room_info = (raw_key, 1)
+                    self.room_keys[target] = room_info
+                    self.shared_keys[target] = raw_key
 
                 if room_info:
                     room_key, key_version = room_info

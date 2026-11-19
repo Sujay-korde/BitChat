@@ -106,3 +106,23 @@
   font-size: 12px;
   font-weight: 500;
 }
+
+.deleteButton {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background-color: transparent;
+  border: 1px solid rgba(242, 63, 67, 0.3);
+  color: #f23f43;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.deleteButton:hover {
+  background-color: rgba(242, 63, 67, 0.15);
+  border-color: #f23f43;
+}
