@@ -73,7 +73,7 @@ function parseSnippet(text?: string): string {
 
 export function NavigationPanel() {
   const { username } = useConnectionStore();
-  const { messages, rooms, activePeer, setActivePeer, joinRoom, presence } = useConversationStore();
+  const { messages, rooms, activePeer, setActivePeer, joinRoom, leaveRoom, presence } = useConversationStore();
 
   const [activeTab, setActiveTab] = useState<'all' | 'channels' | 'dms'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -219,6 +219,9 @@ export function NavigationPanel() {
       client.joinRoom(clean).catch(console.error);
       joinRoom(clean);
     } else {
+      if (rooms.includes(clean)) {
+        leaveRoom(clean);
+      }
       client.sendKeyExchange(clean).catch(console.error);
     }
 

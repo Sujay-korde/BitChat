@@ -41,14 +41,21 @@ function App() {
           break;
         case "MessageReceived": {
           const currentUsername = useConnectionStore.getState().username;
-          // If we are the target (DM to us), map the conversation to the sender.
-          // Otherwise (e.g. room), target remains the target.
-          const isDirectMessage = event.target === currentUsername;
-          const conversationTarget = isDirectMessage ? event.sender : event.target;
+          const isRoom = Boolean(event.isRoom);
           
-          if (!isDirectMessage) {
-            // It's a room message! Automatically ensure the room is registered in our rooms list
+          let conversationTarget: string;
+          if (isRoom) {
+            conversationTarget = event.target.trim().replace(/^[#@]+/, '').toLowerCase();
+            // It is an explicit room message! Auto-join if not already joined
             useConversationStore.getState().joinRoom(conversationTarget);
+          } else {
+            // Direct message: if we sent it, target is the peer; if we received it, target is the sender
+            const peer = event.sender === currentUsername ? event.target : event.sender;
+            conversationTarget = peer.trim().replace(/^[#@]+/, '').toLowerCase();
+            // Direct messages must NEVER be in rooms! Clean up if contaminated earlier:
+            if (useConversationStore.getState().rooms.includes(conversationTarget)) {
+              useConversationStore.getState().leaveRoom(conversationTarget);
+            }
           }
 
           addMessage(conversationTarget, {

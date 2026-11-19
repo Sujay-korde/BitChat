@@ -90,4 +90,23 @@ describe('Group Chat & Presence Tag UI', () => {
     expect(container.textContent).not.toContain('✓');
     expect(container.textContent).not.toContain('✓✓');
   });
+
+  it('keeps direct messages in DM section and does not add DM peers to rooms', () => {
+    const store = useConversationStore.getState();
+    expect(store.rooms).not.toContain('dave');
+
+    // Simulate direct message with dave
+    store.addMessage('dave', {
+      id: 'dm-1',
+      sender: 'alice',
+      text: 'Hey Dave, private message',
+      timestamp: Date.now(),
+    });
+
+    render(<ConversationHeader peer="dave" />);
+
+    expect(screen.getByText('dave')).toBeDefined();
+    expect(screen.getByText('direct message')).toBeDefined();
+    expect(useConversationStore.getState().rooms).not.toContain('dave');
+  });
 });

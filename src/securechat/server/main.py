@@ -56,7 +56,10 @@ class ChatServer:
     async def start_all(self) -> None:
         """Start TCP, WebSocket, and Media Blob servers concurrently."""
         self._prune_task = asyncio.create_task(self._prune_dead_sessions())
-        self.media_server = MediaBlobServer(host=self.host, port=self.media_port)
+        media_p = self.media_port
+        if self.media_port == 8767 and (self.port != 8765 or self.ws_port != 8766):
+            media_p = max(self.port, self.ws_port) + 1
+        self.media_server = MediaBlobServer(host=self.host, port=media_p)
         await self.media_server.start()
         try:
             tcp_server = await asyncio.start_server(self._handle_tcp_client, self.host, self.port)
@@ -69,7 +72,7 @@ class ChatServer:
             )
             logger.info("WebSocket server listening on %s:%d", self.host, self.ws_port)
 
-            async with tcp_server:
+            async with tcp_server, ws_server:
                 await asyncio.gather(
                     tcp_server.serve_forever(),
                     ws_server.wait_closed(),

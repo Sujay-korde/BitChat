@@ -30,6 +30,7 @@ export interface MessageReceived extends AppEvent {
   target: string;
   text: string;
   msg_id?: string;
+  isRoom?: boolean;
 }
 
 export interface MessageStatusChanged extends AppEvent {

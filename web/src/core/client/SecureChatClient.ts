@@ -301,7 +301,8 @@ export class SecureChatClient {
               sender: envelope.sender,
               target: normRoom,
               text: plaintext,
-              msg_id: envelope.msg_id
+              msg_id: envelope.msg_id,
+              isRoom: true
             });
           } else {
             const sharedKey = this.sharedKeys.get(envelope.sender);
@@ -327,9 +328,10 @@ export class SecureChatClient {
             this.dispatch({
               type: "MessageReceived",
               sender: envelope.sender,
-              target: envelope.target,
+              target: envelope.sender,
               text: plaintext,
-              msg_id: envelope.msg_id
+              msg_id: envelope.msg_id,
+              isRoom: false
             });
           }
         } catch (e) {
@@ -517,7 +519,8 @@ export class SecureChatClient {
       sender: this.username,
       target: normRoom,
       text: text,
-      msg_id: msgId
+      msg_id: msgId,
+      isRoom: true
     });
 
     this.dispatch({
@@ -553,7 +556,8 @@ export class SecureChatClient {
         sender: this.username,
         target: peer,
         text: text,
-        msg_id: msgId
+        msg_id: msgId,
+        isRoom: false
       });
 
       this.dispatch({
@@ -600,7 +604,8 @@ export class SecureChatClient {
       sender: this.username,
       target: peer,
       text: text,
-      msg_id: msgId
+      msg_id: msgId,
+      isRoom: false
     });
 
     this.dispatch({
