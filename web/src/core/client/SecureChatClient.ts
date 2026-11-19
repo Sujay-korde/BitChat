@@ -294,6 +294,7 @@ export class SecureChatClient {
             
             // Update sequence
             roomSeqs.set(envelope.sender, data.sequence_number);
+            this._saveState();
             
             this.dispatch({
               type: "MessageReceived",

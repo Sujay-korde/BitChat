@@ -49,11 +49,13 @@ export function Composer({ activePeer }: ComposerProps) {
   const handleSend = () => {
     if (disabled || !text.trim()) return;
     const msgText = text.trim();
+    const cleanPeer = activePeer.trim().replace(/^[#@]+/, '').toLowerCase();
+    const isRoom = rooms.some(r => r.trim().replace(/^[#@]+/, '').toLowerCase() === cleanPeer);
     
-    if (rooms.includes(activePeer)) {
-      client.sendRoomMessage(activePeer, msgText).catch(console.error);
+    if (isRoom) {
+      client.sendRoomMessage(cleanPeer, msgText).catch(console.error);
     } else {
-      client.sendDirectMessage(activePeer, msgText).catch(console.error);
+      client.sendDirectMessage(cleanPeer, msgText).catch(console.error);
     }
     setText('');
     setShowEmojis(false);

@@ -86,10 +86,15 @@ export function NavigationPanel() {
     const seen = new Set<string>();
 
     // 1. Process joined rooms (Channels)
-    for (const room of rooms) {
+    for (const rawRoom of rooms) {
+      const room = rawRoom.trim().replace(/^[#@]+/, '').toLowerCase();
+      if (seen.has(room)) continue;
       seen.add(room);
-      const roomMsgs = messages[room] || [];
+      const roomMsgs = messages[room] || messages[`#${room}`] || [];
       const lastMsg = roomMsgs[roomMsgs.length - 1];
+      const hasOnlineMembers = Object.entries(presence).some(
+        ([k, s]) => k.startsWith(`${room}:`) && (s === 'online' || s === 'active' || s === 'joined')
+      );
       list.push({
         id: room,
         isRoom: true,
@@ -98,19 +103,20 @@ export function NavigationPanel() {
         lastMessageTime: lastMsg?.timestamp || 0,
         lastMessageSender: lastMsg?.sender || '',
         lastMessageStatus: lastMsg?.status,
-        isOnline: false,
+        isOnline: hasOnlineMembers,
       });
     }
 
     // 2. Process all direct message peers
-    for (const target of Object.keys(messages)) {
-      if (seen.has(target)) continue;
+    for (const rawTarget of Object.keys(messages)) {
+      const target = rawTarget.trim().replace(/^[#@]+/, '').toLowerCase();
+      if (seen.has(target) || rooms.some(r => r.replace(/^[#@]+/, '').toLowerCase() === target)) continue;
       seen.add(target);
-      const dmMappings = messages[target] || [];
+      const dmMappings = messages[target] || messages[rawTarget] || [];
       const lastMsg = dmMappings[dmMappings.length - 1];
       
-      const statusVal = presence[target] || Object.entries(presence).find(([key, s]) =>
-        (key === target || key.endsWith(`:${target}`)) && (s === 'online' || s === 'active' || s === 'away')
+      const statusVal = presence[target] || presence[rawTarget] || Object.entries(presence).find(([key, s]) =>
+        (key === target || key === rawTarget || key.endsWith(`:${target}`) || key.endsWith(`:${rawTarget}`)) && (s === 'online' || s === 'active' || s === 'away')
       )?.[1];
       const isPeerOnline = statusVal === 'online' || statusVal === 'active';
 
@@ -126,22 +132,53 @@ export function NavigationPanel() {
       });
     }
 
-    // 3. If activePeer is not in the list yet, add it
-    if (activePeer && !seen.has(activePeer)) {
-      const activeStatus = presence[activePeer] || Object.entries(presence).find(([key, s]) =>
-        (key === activePeer || key.endsWith(`:${activePeer}`)) && (s === 'online' || s === 'active' || s === 'away')
-      )?.[1];
-      const isActivePeerOnline = activeStatus === 'online' || activeStatus === 'active';
+    // 3. Process any peers currently online who haven't messaged yet
+    const currentUsername = useConversationStore.getState().currentUsername;
+    for (const [key, s] of Object.entries(presence)) {
+      if (s === 'online' || s === 'active' || s === 'away') {
+        const peer = (key.includes(':') ? key.split(':')[1] : key).trim().replace(/^[#@]+/, '').toLowerCase();
+        if (
+          peer &&
+          peer !== 'global' &&
+          peer !== 'server' &&
+          peer !== currentUsername &&
+          !rooms.some(r => r.replace(/^[#@]+/, '').toLowerCase() === peer) &&
+          !seen.has(peer)
+        ) {
+          seen.add(peer);
+          list.push({
+            id: peer,
+            isRoom: false,
+            title: peer,
+            lastMessageText: s === 'away' ? 'Away' : 'Active now',
+            lastMessageTime: 0,
+            lastMessageSender: '',
+            isOnline: s === 'online' || s === 'active',
+          });
+        }
+      }
+    }
 
-      list.push({
-        id: activePeer,
-        isRoom: rooms.includes(activePeer),
-        title: activePeer,
-        lastMessageText: '',
-        lastMessageTime: 0,
-        lastMessageSender: '',
-        isOnline: isActivePeerOnline,
-      });
+    // 4. If activePeer is not in the list yet, add it
+    if (activePeer) {
+      const cleanActive = activePeer.trim().replace(/^[#@]+/, '').toLowerCase();
+      if (!seen.has(cleanActive)) {
+        const isActRoom = rooms.some(r => r.trim().replace(/^[#@]+/, '').toLowerCase() === cleanActive);
+        const activeStatus = presence[cleanActive] || presence[activePeer] || Object.entries(presence).find(([key, s]) =>
+          (key === cleanActive || key.endsWith(`:${cleanActive}`)) && (s === 'online' || s === 'active' || s === 'away')
+        )?.[1];
+        const isActivePeerOnline = activeStatus === 'online' || activeStatus === 'active';
+
+        list.push({
+          id: cleanActive,
+          isRoom: isActRoom,
+          title: cleanActive,
+          lastMessageText: '',
+          lastMessageTime: 0,
+          lastMessageSender: '',
+          isOnline: isActivePeerOnline,
+        });
+      }
     }
 
     return list;

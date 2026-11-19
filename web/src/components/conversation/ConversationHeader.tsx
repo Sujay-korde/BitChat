@@ -10,22 +10,30 @@ interface ConversationHeaderProps {
 export function ConversationHeader({ peer }: ConversationHeaderProps) {
   const { rooms, presence, deleteChat } = useConversationStore();
   const [showConfirm, setShowConfirm] = useState(false);
-  const isRoom = rooms.includes(peer);
+  const cleanPeer = peer.trim().replace(/^[#@]+/, '').toLowerCase();
+  const isRoom = rooms.some(r => r.trim().replace(/^[#@]+/, '').toLowerCase() === cleanPeer);
 
   const statusVal = !isRoom
-    ? (presence[peer] || Object.entries(presence).find(([key, s]) =>
-        (key === peer || key.endsWith(`:${peer}`)) && (s === 'online' || s === 'active' || s === 'away')
+    ? (presence[cleanPeer] || presence[peer] || Object.entries(presence).find(([key, s]) =>
+        (key === cleanPeer || key === peer || key.endsWith(`:${cleanPeer}`) || key.endsWith(`:${peer}`)) && (s === 'online' || s === 'active' || s === 'away')
       )?.[1])
     : null;
 
   const isOnline = statusVal === 'online' || statusVal === 'active';
   const isAway = statusVal === 'away';
 
+  const roomMembers = isRoom
+    ? Object.entries(presence).filter(([k, s]) => 
+        k.startsWith(`${cleanPeer}:`) && (s === 'online' || s === 'active' || s === 'joined')
+      )
+    : [];
+  const roomOnlineCount = Math.max(1, roomMembers.length + 1);
+
   const handleDelete = () => {
     if (isRoom) {
-      client.leaveRoom(peer).catch(console.error);
+      client.leaveRoom(cleanPeer).catch(console.error);
     }
-    deleteChat(peer);
+    deleteChat(cleanPeer);
     setShowConfirm(false);
   };
 
@@ -36,7 +44,7 @@ export function ConversationHeader({ peer }: ConversationHeaderProps) {
           <span className={styles.channelIcon}>#</span>
         ) : (
           <div className={styles.avatar} style={{ position: 'relative' }}>
-            {peer.substring(0, 2).toUpperCase()}
+            {cleanPeer.substring(0, 2).toUpperCase()}
             {(isOnline || isAway) && (
               <span
                 style={{
@@ -55,14 +63,67 @@ export function ConversationHeader({ peer }: ConversationHeaderProps) {
         )}
         <div className={styles.details}>
           <div className={styles.titleRow}>
-            <h1 className={styles.title}>{isRoom ? `#${peer}` : peer}</h1>
+            <h1 className={styles.title}>{isRoom ? `#${cleanPeer}` : cleanPeer}</h1>
             <span className={styles.badge}>{isRoom ? 'text channel' : 'direct message'}</span>
+            
+            {/* Explicit Online / Offline Tag */}
+            {isRoom ? (
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  padding: '2px 8px',
+                  borderRadius: '12px',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  backgroundColor: 'rgba(35, 165, 90, 0.15)',
+                  color: '#23a55a',
+                  marginLeft: '8px',
+                }}
+              >
+                <span
+                  style={{
+                    width: '6px',
+                    height: '6px',
+                    borderRadius: '50%',
+                    backgroundColor: '#23a55a',
+                  }}
+                />
+                {roomOnlineCount} Active
+              </span>
+            ) : (
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  padding: '2px 8px',
+                  borderRadius: '12px',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  backgroundColor: isOnline ? 'rgba(35, 165, 90, 0.15)' : isAway ? 'rgba(240, 178, 50, 0.15)' : 'rgba(128, 132, 142, 0.15)',
+                  color: isOnline ? '#23a55a' : isAway ? '#f0b232' : '#949ba4',
+                  marginLeft: '8px',
+                }}
+              >
+                <span
+                  style={{
+                    width: '6px',
+                    height: '6px',
+                    borderRadius: '50%',
+                    backgroundColor: isOnline ? '#23a55a' : isAway ? '#f0b232' : '#80848e',
+                  }}
+                />
+                {isOnline ? 'Online' : isAway ? 'Away' : 'Offline'}
+              </span>
+            )}
           </div>
           <div className={styles.status}>
             {isRoom ? (
               <>
                 <span className={styles.secureDot} />
-                <span>Group Channel • Shared E2EE</span>
+                <span>Group Channel • {roomOnlineCount} Online • Shared E2EE</span>
               </>
             ) : (
               <>

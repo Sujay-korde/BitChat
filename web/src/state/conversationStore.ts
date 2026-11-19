@@ -224,18 +224,25 @@ export const useConversationStore = create<ConversationStateStore>((set, get) =>
     const key = `${room}:${user}`;
     const newPresence = { ...state.presence };
 
-    if (status === 'offline' || status === 'left') {
+    if (status === 'offline') {
       delete newPresence[key];
-      // Check if user is still online in any other room or context
+      delete newPresence[user];
+      for (const k of Object.keys(newPresence)) {
+        if (k === user || k.endsWith(`:${user}`)) {
+          delete newPresence[k];
+        }
+      }
+    } else if (status === 'left') {
+      delete newPresence[key];
       const hasOther = Object.entries(newPresence).some(
-        ([k, s]) => k !== user && k.endsWith(`:${user}`) && (s === 'online' || s === 'active')
+        ([k, s]) => k !== user && k.endsWith(`:${user}`) && (s === 'online' || s === 'active' || s === 'joined')
       );
-      if (!hasOther) {
+      if (!hasOther && newPresence[user] === 'joined') {
         delete newPresence[user];
       }
     } else {
       newPresence[key] = status;
-      newPresence[user] = status;
+      newPresence[user] = status === 'joined' ? (newPresence[user] || 'online') : status;
     }
 
     return { presence: newPresence };

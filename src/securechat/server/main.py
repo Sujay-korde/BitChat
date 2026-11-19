@@ -218,6 +218,7 @@ class ChatServer:
 
         session = self.sessions.pop(username)
         self.presence.set_offline(username)
+        await self._broadcast_global_presence(username, "offline")
 
         for room in list(session.rooms):
             self.rooms.leave(room, username)
@@ -434,11 +435,16 @@ class ChatServer:
 
         elif action.kind == "presence":
             status = action.payload.get("status", "online")
-            if status in ("offline", "left"):
-                self.presence.set_offline(username)
+            if status == "query":
+                for other_user in list(self.sessions.keys()):
+                    if other_user != username:
+                        await self._safe_send(session, self._response(MessageType.PRESENCE, "server", "global", TargetType.USER.value, f"{other_user}:online"))
             else:
-                self.presence.set_online(username)
-            await self._broadcast_global_presence(username, status)
+                if status in ("offline", "left"):
+                    self.presence.set_offline(username)
+                else:
+                    self.presence.set_online(username)
+                await self._broadcast_global_presence(username, status)
 
         elif action.kind == "heartbeat":
             session.last_heartbeat = time.time()

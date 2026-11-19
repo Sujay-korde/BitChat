@@ -35,14 +35,22 @@ function formatFileSize(bytes: number): string {
 }
 
 export function MessageList({ activePeer }: MessageListProps) {
-  const messages = useConversationStore(state => state.messages[activePeer] || EMPTY_MESSAGES);
+  const cleanPeer = activePeer.trim().replace(/^[#@]+/, '').toLowerCase();
+  const messages = useConversationStore(state => 
+    state.messages[cleanPeer] || 
+    state.messages[activePeer] || 
+    (cleanPeer ? state.messages[`#${cleanPeer}`] : undefined) || 
+    EMPTY_MESSAGES
+  );
   const deleteMessage = useConversationStore(state => state.deleteMessage);
   const currentUser = useConnectionStore(state => state.username);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [hoveredMsgId, setHoveredMsgId] = useState<string | null>(null);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (typeof bottomRef.current?.scrollIntoView === 'function') {
+      bottomRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages]);
 
   const tryParseAttachment = (text: string): AttachmentDescriptor | null => {
