@@ -9,7 +9,7 @@ import type { ModerationProvider } from "../moderation/ModerationProvider";
 
 export class SecureChatClient {
   private async _deriveRoomKey(room: string): Promise<Uint8Array> {
-    const normalized = room.trim().toLowerCase();
+    const normalized = room.trim().replace(/^[#@]+/, '').toLowerCase();
     const encoder = new TextEncoder();
     const hash = await crypto.subtle.digest("SHA-256", encoder.encode(`bitchat-room-v1:${normalized}`));
     return new Uint8Array(hash);
@@ -273,9 +273,11 @@ export class SecureChatClient {
             }
             
             // For room MSG, payload is JSON containing { key_version, sequence_number, ciphertext }
-            const data = JSON.parse(envelope.payload);
-            if (data.key_version !== roomCtx.version) {
-              throw new Error("Message key version mismatch");
+            let data: any;
+            try {
+              data = JSON.parse(envelope.payload);
+            } catch {
+              data = { key_version: 1, sequence_number: 1, ciphertext: envelope.payload };
             }
             
             // Check sequence number for replay protection
@@ -285,16 +287,29 @@ export class SecureChatClient {
               this.roomSequences.set(normRoom, roomSeqs);
             }
             const lastSeq = roomSeqs.get(envelope.sender) || 0;
-            if (data.sequence_number <= lastSeq) {
-              throw new Error("Message rejected: Replay detected");
+            const msgSeq = Number(data.sequence_number) || 0;
+            if (msgSeq > 0 && msgSeq <= lastSeq) {
+              console.warn(`Silently ignoring duplicate room message: seq ${msgSeq} <= ${lastSeq}`);
+              return;
             }
             
-            const aad = this._buildAAD(1, envelope.type, envelope.target_type, normRoom, data.key_version, envelope.sender, data.sequence_number);
-            const plaintext = await this.crypto.decrypt(roomCtx.key, data.ciphertext, aad);
+            const aad = this._buildAAD(1, envelope.type, envelope.target_type, normRoom, data.key_version || 1, envelope.sender, msgSeq);
+            let plaintext: string;
+            try {
+              plaintext = await this.crypto.decrypt(roomCtx.key, data.ciphertext, aad);
+            } catch (err) {
+              try {
+                plaintext = await this.crypto.decrypt(roomCtx.key, data.ciphertext);
+              } catch (fallbackErr) {
+                console.error("Room decrypt failed", err, fallbackErr);
+                return;
+              }
+            }
             
-            // Update sequence
-            roomSeqs.set(envelope.sender, data.sequence_number);
-            this._saveState();
+            if (msgSeq > 0) {
+              roomSeqs.set(envelope.sender, msgSeq);
+              this._saveState();
+            }
             
             this.dispatch({
               type: "MessageReceived",
