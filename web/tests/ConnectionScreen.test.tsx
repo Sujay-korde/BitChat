@@ -108,4 +108,33 @@ describe('ConnectionScreen', () => {
     expect((screen.getByLabelText('SERVER') as HTMLInputElement).disabled).toBe(true);
     expect((screen.getByLabelText('IDENTITY') as HTMLInputElement).disabled).toBe(true);
   });
+
+  it('limits username to 16 characters and notifies with a warning signal', () => {
+    vi.mocked(useConnectionStore).mockReturnValue({
+      state: ConnectionState.DISCONNECTED,
+      error: null,
+      username: null,
+      setState: vi.fn(),
+      setUsername: vi.fn(),
+      setError: vi.fn(),
+    });
+
+    render(<ConnectionScreen onConnect={vi.fn()} />);
+
+    const identityInput = screen.getByLabelText('IDENTITY') as HTMLInputElement;
+    expect(identityInput.maxLength).toBe(16);
+
+    // Initial counter: 0/16
+    expect(screen.getByText('0/16')).toBeDefined();
+
+    // Type 16 characters
+    fireEvent.change(identityInput, { target: { value: '1234567890123456' } });
+    expect(screen.getByText('16/16')).toBeDefined();
+    expect(screen.getByText(/Maximum length reached \(16 characters\)/i)).toBeDefined();
+
+    // Attempting to type more than 16 characters truncates and warns
+    fireEvent.change(identityInput, { target: { value: '1234567890123456789' } });
+    expect(identityInput.value).toBe('1234567890123456');
+    expect(screen.getByText(/Username cannot exceed 16 characters/i)).toBeDefined();
+  });
 });

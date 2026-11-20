@@ -9,20 +9,64 @@ interface ConnectionScreenProps {
 
 const CLOUD_WS_URL = 'wss://bitchat-prod-production.up.railway.app';
 const LOCAL_WS_URL = 'ws://127.0.0.1:8766';
+const MAX_USERNAME_LENGTH = 16;
 
 export function ConnectionScreen({ onConnect }: ConnectionScreenProps) {
   const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
   const defaultServerUrl = (import.meta as any).env?.VITE_WS_URL || (isLocal ? LOCAL_WS_URL : CLOUD_WS_URL);
   const [username, setUsername] = useState('');
   const [serverUrl, setServerUrl] = useState(defaultServerUrl);
+  const [warning, setWarning] = useState<string | null>(null);
   const { state, error } = useConnectionStore();
 
   const isConnecting = state === ConnectionState.CONNECTING || state === ConnectionState.AUTHENTICATING;
 
+  const handleUsernameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let val = e.target.value;
+    if (val.length > MAX_USERNAME_LENGTH) {
+      val = val.slice(0, MAX_USERNAME_LENGTH);
+      setWarning(`Username cannot exceed ${MAX_USERNAME_LENGTH} characters.`);
+    } else if (val.length === MAX_USERNAME_LENGTH) {
+      setWarning(`Maximum length reached (${MAX_USERNAME_LENGTH} characters).`);
+    } else {
+      setWarning(null);
+    }
+    setUsername(val);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // If the input is already at max length and user presses any printable character
+    if (
+      username.length >= MAX_USERNAME_LENGTH &&
+      e.key.length === 1 &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      !e.altKey
+    ) {
+      setWarning(`Username cannot exceed ${MAX_USERNAME_LENGTH} characters.`);
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const pasted = e.clipboardData.getData('text');
+    if (username.length + pasted.length > MAX_USERNAME_LENGTH) {
+      setWarning(`Username cannot exceed ${MAX_USERNAME_LENGTH} characters.`);
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (username.trim() && serverUrl.trim() && !isConnecting) {
-      onConnect(username.trim(), serverUrl.trim());
+    const cleanUser = username.trim();
+    if (!cleanUser) {
+      setWarning('Username cannot be empty.');
+      return;
+    }
+    if (cleanUser.length > MAX_USERNAME_LENGTH) {
+      setWarning(`Username cannot exceed ${MAX_USERNAME_LENGTH} characters.`);
+      return;
+    }
+    if (cleanUser && serverUrl.trim() && !isConnecting) {
+      onConnect(cleanUser, serverUrl.trim());
     }
   };
 
@@ -103,23 +147,40 @@ export function ConnectionScreen({ onConnect }: ConnectionScreenProps) {
           </div>
 
           <div className={styles.formGroup}>
-            <label htmlFor="username" className={styles.label}>IDENTITY</label>
+            <div className={styles.labelRow}>
+              <label htmlFor="username" className={styles.label}>IDENTITY</label>
+              <span
+                className={`${styles.charCounter} ${username.length >= MAX_USERNAME_LENGTH ? styles.charCounterLimit : ''}`}
+                aria-live="polite"
+              >
+                {username.length}/{MAX_USERNAME_LENGTH}
+              </span>
+            </div>
             <input
               id="username"
               type="text"
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              onChange={handleUsernameChange}
+              onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
+              maxLength={MAX_USERNAME_LENGTH}
               placeholder="Select identity / create identity"
-              className={styles.input}
+              className={`${styles.input} ${warning ? styles.inputWarning : ''}`}
               disabled={isConnecting}
               autoFocus
             />
+            {warning && (
+              <div className={styles.signalMessage} role="alert">
+                <span className={styles.signalIcon}>⚠️</span>
+                <span>{warning}</span>
+              </div>
+            )}
           </div>
           
           <button 
             type="submit" 
             className={styles.button}
-            disabled={!username.trim() || !serverUrl.trim() || isConnecting}
+            disabled={!username.trim() || username.trim().length > MAX_USERNAME_LENGTH || !serverUrl.trim() || isConnecting}
           >
             {getStatusText()}
           </button>
