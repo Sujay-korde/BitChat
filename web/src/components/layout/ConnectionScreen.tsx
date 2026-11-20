@@ -7,6 +7,7 @@ interface ConnectionScreenProps {
   onConnect: (username: string, serverUrl: string) => void;
 }
 
+const PREVIEW_WS_URL = 'wss://bitchat-preview-production.up.railway.app';
 const CLOUD_WS_URL = 'wss://bitchat-prod-production.up.railway.app';
 const LOCAL_WS_URL = 'ws://127.0.0.1:8766';
 const MAX_USERNAME_LENGTH = 16;
@@ -108,7 +109,24 @@ export function ConnectionScreen({ onConnect }: ConnectionScreenProps) {
               className={styles.input}
               disabled={isConnecting}
             />
-            <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+            <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => setServerUrl(PREVIEW_WS_URL)}
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 500,
+                  padding: '4px 10px',
+                  borderRadius: '4px',
+                  border: serverUrl === PREVIEW_WS_URL ? '1px solid #23a55a' : '1px solid var(--color-border)',
+                  background: serverUrl === PREVIEW_WS_URL ? 'rgba(35, 165, 90, 0.2)' : 'var(--color-bg-surface-secondary)',
+                  color: serverUrl === PREVIEW_WS_URL ? '#23a55a' : 'var(--color-text-muted)',
+                  cursor: 'pointer',
+                  transition: 'all 0.12s ease'
+                }}
+              >
+                🚀 Deployed Feature (Preview)
+              </button>
               <button
                 type="button"
                 onClick={() => setServerUrl(CLOUD_WS_URL)}
@@ -124,7 +142,7 @@ export function ConnectionScreen({ onConnect }: ConnectionScreenProps) {
                   transition: 'all 0.12s ease'
                 }}
               >
-                ⚡ Cloud (Railway)
+                ⚡ Production (Railway)
               </button>
               <button
                 type="button"
