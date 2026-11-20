@@ -14,9 +14,10 @@ MAX_UPLOAD_SIZE = 25 * 1024 * 1024  # 25MB max ciphertext blob size
 
 
 class MediaBlobServer:
-    def __init__(self, host: str = "127.0.0.1", port: int = 8767, storage_dir: str | None = None) -> None:
+    def __init__(self, host: str = "127.0.0.1", port: int = 8767, storage_dir: str | None = None, db: Any = None) -> None:
         self.host = host
         self.port = port
+        self.db = db
         self.storage_dir = Path(storage_dir or (Path(__file__).parent / "media_storage"))
         self.storage_dir.mkdir(parents=True, exist_ok=True)
         self._server: asyncio.Server | None = None
@@ -34,6 +35,11 @@ class MediaBlobServer:
         blob_id = str(uuid.uuid4())
         file_path = self.storage_dir / blob_id
         file_path.write_bytes(data)
+        if self.db and hasattr(self.db, "store_media_blob"):
+            try:
+                self.db.store_media_blob(blob_id, len(data))
+            except Exception as e:
+                logger.warning("Failed to record media blob in database: %s", e)
         return blob_id
 
     def get_blob(self, blob_id: str) -> bytes | None:
@@ -100,6 +106,11 @@ class MediaBlobServer:
                 blob_id = str(uuid.uuid4())
                 file_path = self.storage_dir / blob_id
                 file_path.write_bytes(body)
+                if self.db and hasattr(self.db, "store_media_blob"):
+                    try:
+                        self.db.store_media_blob(blob_id, len(body))
+                    except Exception as e:
+                        logger.warning("Failed to record media blob in database: %s", e)
 
                 res_json = json.dumps({"blob_id": blob_id, "size": len(body)}).encode("utf-8")
                 headers_out = (

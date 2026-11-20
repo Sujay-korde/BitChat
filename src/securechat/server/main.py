@@ -14,6 +14,7 @@ from websockets.asyncio.server import ServerConnection
 from securechat.protocol.framing import FrameError, read_frame, write_frame
 from securechat.protocol.schema import SchemaError, validate_message_envelope
 from securechat.protocol.types import MessageType, TargetType
+from .database import ChatDatabase
 from .media import MediaBlobServer
 from .presence import PresenceManager
 from .rooms import RoomManager
@@ -32,6 +33,8 @@ class ChatServer:
     port: int = 8765
     ws_port: int = 8766
     media_port: int = 8767
+    db_path: str = field(default_factory=lambda: os.environ.get("BITCHAT_DB_PATH", "bitchat.db"))
+    db: ChatDatabase | None = None
     router: MessageRouter = field(default_factory=MessageRouter)
     rooms: RoomManager = field(default_factory=RoomManager)
     presence: PresenceManager = field(default_factory=PresenceManager)
@@ -41,6 +44,10 @@ class ChatServer:
     room_message_history: dict[str, list[dict[str, object]]] = field(default_factory=dict)
     media_server: MediaBlobServer | None = None
     _prune_task: asyncio.Task | None = None
+
+    def __post_init__(self) -> None:
+        if self.db is None:
+            self.db = ChatDatabase(self.db_path)
 
     async def start(self) -> None:
         self._prune_task = asyncio.create_task(self._prune_dead_sessions())
@@ -59,7 +66,7 @@ class ChatServer:
         media_p = self.media_port
         if self.media_port == 8767 and (self.port != 8765 or self.ws_port != 8766):
             media_p = max(self.port, self.ws_port) + 1
-        self.media_server = MediaBlobServer(host=self.host, port=media_p)
+        self.media_server = MediaBlobServer(host=self.host, port=media_p, db=self.db)
         await self.media_server.start()
         try:
             tcp_server = await asyncio.start_server(self._handle_tcp_client, self.host, self.port)
@@ -90,7 +97,7 @@ class ChatServer:
         internal_ws_port = 8766
         internal_media_port = 8767
         
-        self.media_server = MediaBlobServer(host="127.0.0.1", port=internal_media_port)
+        self.media_server = MediaBlobServer(host="127.0.0.1", port=internal_media_port, db=self.db)
         await self.media_server.start()
         
         ws_server = await websockets.serve(
@@ -317,8 +324,8 @@ class ChatServer:
                     username = result
         except websockets.exceptions.ConnectionClosed:
             pass
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception("Exception in _handle_ws_client: %s", e)
         finally:
             if username:
                 await self._cleanup_session(username, websocket)
@@ -384,10 +391,32 @@ class ChatServer:
                 last_heartbeat=time.time(),
             )
             self.presence.set_online(new_username)
+            if self.db:
+                ident = action.payload.get("identity_key") if isinstance(action.payload, dict) else None
+                self.db.upsert_user(new_username, identity_key=ident)
+                self.db.update_last_seen(new_username)
             logger.info("Authenticated: %s", new_username)
             await send_fn(self._response(MessageType.AUTH_OK, new_username, new_username, "user", "ok"))
             
-            if new_username in self.message_queue:
+            # Deliver queued offline messages
+            if self.db:
+                self.message_queue.pop(new_username, None)
+                for row in self.db.get_undelivered_messages_for_user(new_username):
+                    msg = {
+                        "type": MessageType.MSG.value,
+                        "msg_id": row["msg_id"],
+                        "sender": row["sender"],
+                        "target": row["target"],
+                        "target_type": row["target_type"],
+                        "timestamp": row["timestamp"],
+                        "payload": row["ciphertext"],
+                    }
+                    try:
+                        await send_fn(msg)
+                        self.db.mark_message_delivered(row["msg_id"])
+                    except Exception as e:
+                        logger.error("Failed to deliver offline DB message to %s: %s", new_username, e)
+            elif new_username in self.message_queue:
                 for msg in self.message_queue[new_username]:
                     try:
                         await send_fn(msg)
@@ -423,9 +452,27 @@ class ChatServer:
             room = action.payload["room"].strip().lstrip("#@").lower()
             self.rooms.join(room, username)
             session.rooms.add(room)
+            if self.db:
+                self.db.join_room(room, username)
             logger.info("JOIN: %s -> %s", username, room)
             await self._broadcast_presence(room, username, "joined")
-            for past_msg in self.room_message_history.get(room, []):
+
+            past_messages: list[dict[str, object]] = []
+            if self.db:
+                for row in self.db.get_room_message_history(room, limit=50):
+                    past_messages.append({
+                        "type": MessageType.MSG.value,
+                        "msg_id": row["msg_id"],
+                        "sender": row["sender"],
+                        "target": row["target"],
+                        "target_type": row["target_type"],
+                        "timestamp": row["timestamp"],
+                        "payload": row["ciphertext"],
+                    })
+            if not past_messages:
+                past_messages = self.room_message_history.get(room, [])
+
+            for past_msg in past_messages:
                 if past_msg.get("sender") != username:
                     await self._safe_send(session, past_msg)
 
@@ -433,6 +480,8 @@ class ChatServer:
             room = action.payload["room"].strip().lstrip("#@").lower()
             self.rooms.leave(room, username)
             session.rooms.discard(room)
+            if self.db:
+                self.db.leave_room(room, username)
             logger.info("LEAVE: %s -> %s", username, room)
             await self._broadcast_presence(room, username, "left")
 
@@ -548,6 +597,16 @@ class ChatServer:
         if target_type == TargetType.ROOM.value:
             norm_target = target.strip().lstrip("#@").lower()
             message["target"] = norm_target
+            if self.db:
+                self.db.store_message(
+                    msg_id=msg_id,
+                    sender=sender,
+                    target=norm_target,
+                    target_type=target_type,
+                    ciphertext=payload["ciphertext"],
+                    timestamp=message["timestamp"],
+                    is_delivered=True,
+                )
             history = self.room_message_history.setdefault(norm_target, [])
             if len(history) >= 50:
                 history.pop(0)
@@ -561,7 +620,18 @@ class ChatServer:
             if send_tasks:
                 await asyncio.gather(*send_tasks, return_exceptions=True)
         elif target_type == TargetType.USER.value:
-            if target in self.sessions:
+            is_online = target in self.sessions
+            if self.db:
+                self.db.store_message(
+                    msg_id=msg_id,
+                    sender=sender,
+                    target=target,
+                    target_type=target_type,
+                    ciphertext=payload["ciphertext"],
+                    timestamp=message["timestamp"],
+                    is_delivered=is_online,
+                )
+            if is_online:
                 await self._safe_send(self.sessions[target], message)
             else:
                 self._enqueue_offline_message(target, message)

@@ -20,6 +20,11 @@ src/securechat/server/media_storage/*
 .env.local
 .env.*.local
 
+# Database files
+*.db
+*.db-wal
+*.db-shm
+
 # Logs
 *.log
 logs/
